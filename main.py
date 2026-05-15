@@ -1,6 +1,7 @@
 from collections import Counter
 
 from src.busqueda_natural import BusquedaNatural
+from src.chatbot_qa import ChatbotSIMANW, SistemaQA
 from src.clasificador_noticias import (
     ETIQUETAS_ENTRENAMIENTO,
     TEXTOS_ENTRENAMIENTO,
@@ -12,11 +13,24 @@ from src.evaluador_irs import EvaluadorIRS
 from src.exportador import ExportadorNoticias
 from src.extractor import ExtractorNoticias
 from src.html_demo import html_portal_noticias
+from src.knowledge_graph import (
+    QUERY_AUTORES_PRODUCTIVIDAD,
+    QUERY_CONTEO_CATEGORIA,
+    QUERY_DBPEDIA_HERRAMIENTAS_NLP,
+    QUERY_NOTICIAS_METADATA,
+    QUERY_SENTIMIENTO_NEGATIVO,
+    QUERY_WIKIDATA_SOFTWARE_IA_PYTHON,
+    ConectorDatosAbiertos,
+    KnowledgeGraphSIMANW,
+    cargar_datasets_demo,
+    endpoints_sparql_disponibles,
+)
 from src.motor_busqueda import MotorBusqueda
 from src.parser_dom import analizar_dom
 from src.pipeline_nlp import PipelineNLP
 from src.recomendacion import SistemaRecomendacion
 from src.representacion_vectorial import RepresentacionVectorial
+from src.reportes import GeneradorReportes, resumen_pipeline_completo
 from src.sentimientos import AnalizadorSentimientos
 from src.similitud import CalculadorSimilitud
 
@@ -394,6 +408,151 @@ def ejecutar_busqueda_natural(motor: MotorBusqueda) -> BusquedaNatural:
     return busqueda_nl
 
 
+def ejecutar_chatbot(noticias: list[dict]) -> ChatbotSIMANW:
+    print("=== FASE 5.1: Chatbot del SIMANW ===\n")
+
+    chatbot = ChatbotSIMANW(noticias)
+    preguntas_usuario = [
+        "Que noticias hay sobre inteligencia artificial?",
+        "Cual es el tono de la noticia de los mercados financieros?",
+        "Hay algo sobre datos abiertos del gobierno?",
+        "Que noticias de tecnologia tienen sentimiento positivo?",
+        "Cual es la capital de Francia?",
+    ]
+
+    for pregunta in preguntas_usuario:
+        respuesta, confianza = chatbot.responder(pregunta)
+        print(f"  Usuario: {pregunta}")
+        print(f"  Bot [{confianza:.3f}]: {respuesta[:100]}...")
+        print()
+
+    print(f"Resumen: {chatbot.resumen_interaccion()}\n")
+    return chatbot
+
+
+def ejecutar_sistema_qa(noticias: list[dict], motor: MotorBusqueda) -> SistemaQA:
+    print("=== FASE 5.2: Sistema Question/Answering ===\n")
+
+    qa_system = SistemaQA(noticias, motor)
+    preguntas_qa = [
+        "Cuantas noticias tienes?",
+        "Cual es el sentimiento general de las noticias?",
+        "Que categorias de noticias hay?",
+        "Dame un resumen de las noticias",
+        "Recomiendame algo sobre tecnologia",
+        "Que dice la noticia sobre Python?",
+    ]
+
+    for pregunta in preguntas_qa:
+        respuesta, tipo, confianza = qa_system.conversar(pregunta)
+        print(f"  Pregunta: {pregunta}")
+        print(f"  [{tipo}][{confianza:.2f}] {respuesta[:120]}")
+        print()
+
+    return qa_system
+
+
+def ejecutar_knowledge_graph(noticias: list[dict]) -> KnowledgeGraphSIMANW:
+    print("=== FASE 6.1: Knowledge Graph ===\n")
+
+    kg = KnowledgeGraphSIMANW()
+    kg.construir_desde_noticias(noticias)
+
+    print("Knowledge Graph construido:")
+    print(f"  Total de triples: {kg.total_triples()}")
+    print(f"  Noticias almacenadas: {len(noticias)}")
+
+    print("\nOntologia (fragmento en Turtle):")
+    turtle = kg.serializar("turtle")
+    lineas = [linea for linea in turtle.split("\n") if linea.strip()][:25]
+    for linea in lineas:
+        print(f"  {linea}")
+    print()
+
+    return kg
+
+
+def ejecutar_consultas_sparql(kg: KnowledgeGraphSIMANW) -> None:
+    print("=== FASE 6.2: Consultas SPARQL ===\n")
+
+    print("Consulta 1: Noticias con metadatos")
+    print("-" * 60)
+    for row in kg.consultar(QUERY_NOTICIAS_METADATA):
+        print(f"  [{row.fecha}] [{row.categoria}] {str(row.titulo)[:45]}... - {row.autor}")
+
+    print("\nConsulta 2: Noticias con sentimiento negativo")
+    print("-" * 60)
+    for row in kg.consultar(QUERY_SENTIMIENTO_NEGATIVO):
+        print(f"  [{float(row.score):+.3f}] {str(row.titulo)[:55]}")
+
+    print("\nConsulta 3: Distribucion por categoria")
+    print("-" * 60)
+    for row in kg.consultar(QUERY_CONTEO_CATEGORIA):
+        print(f"  {row.categoria}: {row.total} noticia(s)")
+
+    print("\nConsulta 4: Productividad por autor")
+    print("-" * 60)
+    for row in kg.consultar(QUERY_AUTORES_PRODUCTIVIDAD):
+        print(f"  {row.autor}: {row.publicaciones} publicacion(es)")
+    print()
+
+
+def ejecutar_datos_abiertos(kg: KnowledgeGraphSIMANW) -> ConectorDatosAbiertos:
+    print("=== FASE 6.3: Datos Abiertos Integrados ===\n")
+
+    conector = ConectorDatosAbiertos(kg)
+    cargar_datasets_demo(conector)
+
+    print(f"Triples totales en KG (con datos abiertos): {kg.total_triples()}")
+
+    print("\nDatasets de datos abiertos cargados:")
+    for row in conector.consultar_datos():
+        print(f"  [{row.tema}] {row.titulo} - {row.publicador}")
+
+    print("\nEnlaces noticias - datos abiertos:")
+    enlaces = conector.enlazar_noticias_con_datos()
+    if enlaces:
+        for row in enlaces:
+            print(f"  Noticia: {str(row.noticia_titulo)[:40]}...")
+            print(f"  Dataset: {row.dataset_titulo}")
+            print()
+    else:
+        print("  (Los enlaces se generan cuando las categorias coinciden con los temas)")
+    print()
+
+    return conector
+
+
+def ejecutar_endpoints_sparql_externos() -> None:
+    print("=== FASE 6.4: Endpoints SPARQL Externos ===\n")
+
+    print("Consulta para Wikidata (software de IA en Python):")
+    print(QUERY_WIKIDATA_SOFTWARE_IA_PYTHON)
+
+    print("\nConsulta para DBpedia (herramientas NLP):")
+    print(QUERY_DBPEDIA_HERRAMIENTAS_NLP)
+
+    print("\nEndpoints SPARQL disponibles para el SIMANW:")
+    for nombre, endpoint in endpoints_sparql_disponibles().items():
+        print(f"  - {nombre}: {endpoint}")
+
+    print("\n# Para ejecutar estas consultas se requiere internet y SPARQLWrapper.\n")
+
+
+def ejecutar_reportes(noticias: list[dict], kg: KnowledgeGraphSIMANW) -> GeneradorReportes:
+    print("=== FASE 7.1: Generador de Reportes ===\n")
+
+    reportero = GeneradorReportes(noticias, kg)
+    print(reportero.reporte_completo())
+    print()
+    return reportero
+
+
+def ejecutar_integracion_final() -> None:
+    print("=== FASE 7.2: Integracion Final ===")
+    print(resumen_pipeline_completo())
+
+
 def main() -> None:
     ejecutar_parser_dom()
     noticias = ejecutar_extraccion()
@@ -408,6 +567,14 @@ def main() -> None:
     motor = ejecutar_motor_busqueda(noticias)
     ejecutar_evaluacion_busqueda(noticias)
     ejecutar_busqueda_natural(motor)
+    ejecutar_chatbot(noticias)
+    ejecutar_sistema_qa(noticias, motor)
+    kg = ejecutar_knowledge_graph(noticias)
+    ejecutar_consultas_sparql(kg)
+    ejecutar_datos_abiertos(kg)
+    ejecutar_endpoints_sparql_externos()
+    ejecutar_reportes(noticias, kg)
+    ejecutar_integracion_final()
     ejecutar_exportacion(noticias)
 
 
