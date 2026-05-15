@@ -1,0 +1,257 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from src.analisis_discurso import AnalisisDiscurso
+from src.analizador_hilo import HILO_IA_DEMO, AnalizadorHiloDiscusion
+from src.chatbot_contextual import CONVERSACION_AC6, ChatbotContextual
+from src.comparador_busqueda import CONSULTAS_EVAL_AC5, ComparadorModelos
+from src.enriquecedor_kg import enriquecer_categorias_demo
+from src.knowledge_graph import KnowledgeGraphSIMANW
+from src.motor_busqueda import MotorBusqueda
+from src.rastreador_paginado import RastreadorPaginado, crear_fetcher_simulado
+from src.selector_modelo import ETIQUETAS_AC3, TEXTOS_AC3, SelectorModelo
+
+
+TEXTO_DISCURSO = """La educacion es la herramienta mas poderosa para transformar
+una sociedad. En Mexico, la inversion en educacion debe ser prioritaria para
+garantizar el desarrollo economico y social. Los jovenes mexicanos merecen
+oportunidades de calidad en todos los niveles educativos. Las universidades
+tecnologicas y los institutos de investigacion son pilares fundamentales para
+la innovacion. La ciencia y la tecnologia son motores del progreso nacional.
+El Instituto Tecnologico de Morelia ha formado generaciones de ingenieros que
+contribuyen al desarrollo del pais. La inteligencia artificial y la programacion
+son competencias esenciales para el futuro laboral. Mexico necesita mas
+profesionales en ciencias computacionales y recuperacion de informacion."""
+
+
+TEXTO_CIENTIFICO = """El procesamiento de lenguaje natural permite a las computadoras
+comprender y generar texto humano. Los modelos de aprendizaje profundo como BERT
+y GPT han revolucionado este campo. La representacion vectorial de documentos
+mediante TF-IDF sigue siendo fundamental para sistemas de recuperacion de informacion.
+Los algoritmos de clasificacion como Naive Bayes y SVM logran alta precision en
+categorizacion de texto. El analisis de sentimientos combina tecnicas lexicas con
+aprendizaje automatico para determinar la polaridad emocional de un texto."""
+
+
+NOTICIAS_COMPLEMENTARIAS = [
+    {
+        "titulo": "Avances en inteligencia artificial generativa",
+        "cuerpo": "La inteligencia artificial y el aprendizaje automatico impulsan nuevas aplicaciones de software.",
+        "categoria_predicha": "tecnologia",
+        "sentimiento": {"etiqueta": "positivo"},
+    },
+    {
+        "titulo": "Mercados financieros muestran volatilidad",
+        "cuerpo": "La inflacion y las tasas de interes presionan al mercado de valores y a los inversionistas.",
+        "categoria_predicha": "economia",
+        "sentimiento": {"etiqueta": "negativo"},
+    },
+    {
+        "titulo": "Descubrimiento cientifico sobre cambio climatico",
+        "cuerpo": "Investigadores publican datos sobre emisiones de carbono y calentamiento global.",
+        "categoria_predicha": "ciencia",
+        "sentimiento": {"etiqueta": "negativo"},
+    },
+    {
+        "titulo": "Python mejora herramientas de programacion",
+        "cuerpo": "La nueva version de Python ayuda al desarrollo de software e inteligencia artificial.",
+        "categoria_predicha": "tecnologia",
+        "sentimiento": {"etiqueta": "positivo"},
+    },
+    {
+        "titulo": "Gobierno publica datos abiertos",
+        "cuerpo": "El gobierno libera datos abiertos para fortalecer transparencia y politicas publicas.",
+        "categoria_predicha": "politica",
+        "sentimiento": {"etiqueta": "positivo"},
+    },
+]
+
+
+def ejecutar_ac1() -> None:
+    print("=== AC-1: Rastreo con Paginacion ===\n")
+
+    rastreador = RastreadorPaginado(
+        url_base="https://ejemplo-noticias.com/noticias?page=1",
+        selector_articulos="article",
+        selector_siguiente="a.next-page",
+        delay=3,
+        max_paginas=4,
+        fetcher=crear_fetcher_simulado(noticias_por_pagina=5, total_paginas=4),
+        respetar_robots=False,
+    )
+
+    resultados = rastreador.rastrear(minimo_noticias=20)
+    ruta_salida = Path("data") / "ac1_noticias_paginadas.json"
+    total_guardadas = rastreador.guardar_json(ruta_salida)
+
+    print(f"Paginas visitadas: {len(rastreador.paginas_visitadas)}")
+    print(f"Total noticias extraidas: {len(resultados)}")
+    print(f"Archivo JSON generado: {ruta_salida} ({total_guardadas} registros)")
+    print("Primeras 5:")
+    for noticia in resultados[:5]:
+        print(f"  - {noticia['titulo']}")
+    print()
+
+
+def ejecutar_ac2() -> None:
+    print("=== AC-2: Analisis Estadistico de Discursos ===\n")
+
+    analizador = AnalisisDiscurso()
+    analisis_disc = analizador.analizar(TEXTO_DISCURSO, "Discurso Educativo")
+    analisis_cient = analizador.analizar(TEXTO_CIENTIFICO, "Texto Cientifico")
+
+    for analisis in [analisis_disc, analisis_cient]:
+        print(f"--- {analisis['titulo']} ---")
+        print(f"  Oraciones: {analisis['oraciones']}")
+        print(f"  Palabras: {analisis['palabras_totales']}")
+        print(f"  Vocabulario: {analisis['vocabulario_unico']}")
+        print(f"  Riqueza lexica: {analisis['riqueza_lexica_global']:.3f}")
+        print(f"  Prom. palabras/oracion: {analisis['promedio_palabras_oracion']:.1f}")
+        print(f"  Riqueza por seccion: {[f'{valor:.3f}' for valor in analisis['riqueza_por_seccion']]}")
+        print(f"  Top bigramas: {analisis['top_bigramas'][:4]}")
+        print(f"  Posibles entidades: {[entidad[0] for entidad in analisis['posibles_entidades'][:5]]}")
+        print()
+
+    print("--- Comparativa ---")
+    comparativa = analizador.comparar_textos([analisis_disc, analisis_cient])
+    print(f"{'Texto':<20} {'Palabras':>9} {'Vocab':>7} {'Riqueza':>8} {'P/Oracion':>10}")
+    for fila in comparativa:
+        print(
+            f"{fila['titulo']:<20} {fila['palabras']:>9} {fila['vocabulario']:>7} "
+            f"{fila['riqueza']:>8.3f} {fila['promedio_oracion']:>10.1f}"
+        )
+    print()
+
+
+def ejecutar_ac3() -> None:
+    print("=== AC-3: Seleccion Automatica de Modelo ===\n")
+
+    selector = SelectorModelo()
+    selector.evaluar_todos(TEXTOS_AC3, ETIQUETAS_AC3, cv_folds=3)
+
+    print(selector.reporte())
+    print(f"\nModelo seleccionado: {selector.mejor_modelo[0] if selector.mejor_modelo else 'N/A'}")
+
+    nuevos = [
+        "nueva aplicacion de machine learning para detectar fraudes",
+        "el presidente anuncio reformas al sistema de justicia",
+        "inflacion y tasas de interes presionan al mercado de valores",
+    ]
+    predicciones = selector.predecir(nuevos)
+
+    print("\nPredicciones con el mejor modelo:")
+    for texto, prediccion in zip(nuevos, predicciones):
+        print(f"  [{prediccion}] {texto[:50]}...")
+    print()
+
+
+def ejecutar_ac4() -> None:
+    print("=== AC-4: Analisis de Hilo de Discusion ===\n")
+
+    analizador = AnalizadorHiloDiscusion()
+    analizador.cargar_hilo(HILO_IA_DEMO)
+
+    resumen = analizador.resumen_hilo()
+    print("--- Resumen del Hilo ---")
+    print(f"  Mensajes: {resumen['total_mensajes']}")
+    print(f"  Participantes: {resumen['participantes']}")
+    print(f"  Tono general: {resumen['tono']} ({resumen['sentimiento_promedio']:+.3f})")
+    print(f"  Positivos: {resumen['positivos_pct']:.0f}% | Negativos: {resumen['negativos_pct']:.0f}%")
+    print(f"  Hashtags: {resumen['hashtags_top']}")
+    print(f"  Mas activos: {resumen['usuarios_activos']}")
+
+    print("\n--- Evolucion del Sentimiento ---")
+    for item in analizador.evolucion_sentimiento(ventana=3):
+        barra = "+" * int(max(0, item["tendencia"] * 10))
+        barra += "-" * int(max(0, -item["tendencia"] * 10))
+        print(
+            f"  Msg {item['posicion']:>2}: [{item['sentimiento_puntual']:+.2f}] "
+            f"tendencia: {item['tendencia']:+.3f} |{barra}"
+        )
+
+    print("\n--- Subtemas Detectados ---")
+    subtemas = analizador.detectar_subtemas(n_clusters=3)
+    for cluster_id, info in subtemas.items():
+        print(f"  Subtema {cluster_id + 1} ({info['n_mensajes']} msgs): {info['keywords']}")
+    print()
+
+
+def ejecutar_ac5() -> None:
+    print("=== AC-5: Comparacion Booleano vs. Vectorial ===\n")
+
+    comparador = ComparadorModelos(NOTICIAS_COMPLEMENTARIAS)
+    print(comparador.reporte(CONSULTAS_EVAL_AC5))
+    print()
+
+
+def ejecutar_ac6() -> None:
+    print("=== AC-6: Chatbot con Memoria de Contexto ===\n")
+
+    motor = MotorBusqueda()
+    motor.indexar(NOTICIAS_COMPLEMENTARIAS)
+    chatbot = ChatbotContextual(NOTICIAS_COMPLEMENTARIAS, motor)
+
+    for pregunta in CONVERSACION_AC6:
+        respuesta, tipo, confianza = chatbot.responder(pregunta)
+        print(f"  Usuario: {pregunta}")
+        print(f"  Bot [{tipo}][{confianza:.2f}]: {respuesta[:80]}...")
+        print()
+
+    stats = chatbot.estadisticas_sesion()
+    print("Estadisticas de sesion:")
+    print(f"  Interacciones: {stats['interacciones']}")
+    print(f"  Temas de interes: {stats['temas_interes']}")
+    print(f"  Tipos de respuesta: {dict(stats['tipos_respuesta'])}")
+    print()
+
+
+def ejecutar_ac7() -> None:
+    print("=== AC-7: Enriquecimiento con Wikidata ===\n")
+
+    kg = KnowledgeGraphSIMANW()
+    noticias_kg = []
+    for indice, noticia in enumerate(NOTICIAS_COMPLEMENTARIAS, start=1):
+        sentimiento = noticia.get("sentimiento", {}).copy()
+        sentimiento.setdefault("compound", 0.0)
+        noticia_kg = {
+            **noticia,
+            "fecha": f"2026-05-{10 - indice:02d}",
+            "autor": f"Autor {indice}",
+            "fuente": "Demo complementaria",
+            "url": f"https://ejemplo.test/noticia/{indice}",
+            "sentimiento": sentimiento,
+        }
+        noticias_kg.append(noticia_kg)
+    kg.construir_desde_noticias(noticias_kg)
+
+    triples_antes = kg.total_triples()
+    enriquecedor = enriquecer_categorias_demo(kg)
+
+    print(f"Triples antes del enriquecimiento: {triples_antes}")
+    print(f"Triples totales tras enriquecimiento: {kg.total_triples()}")
+    print(f"Enlaces externos creados: {len(enriquecedor.enlaces_externos)}")
+
+    print("\nEnlaces locales - Wikidata:")
+    for enlace in enriquecedor.consulta_enriquecimiento():
+        local_short = str(enlace.local).split("/")[-1]
+        externo_short = str(enlace.externo).split("/")[-1]
+        print(f"  {local_short} - {externo_short} ({enlace.etiqueta})")
+
+    print("\nQuery sugerida para Wikidata (tecnologia):")
+    print(enriquecedor.generar_query_wikidata("tecnologia"))
+    print()
+
+
+def main() -> None:
+    ejecutar_ac1()
+    ejecutar_ac2()
+    ejecutar_ac3()
+    ejecutar_ac4()
+    ejecutar_ac5()
+    ejecutar_ac6()
+    ejecutar_ac7()
+
+
+if __name__ == "__main__":
+    main()
