@@ -94,10 +94,10 @@
     },
     "categoria_predicha": "tecnologia",
     "scores_categoria": {
-      "ciencia": -0.6325665436114064,
-      "economia": -0.6206977328346567,
-      "politica": -0.6439086555322355,
-      "tecnologia": -0.0015285280240981414
+      "ciencia": -0.6325670779584066,
+      "economia": -0.620697977842696,
+      "politica": -0.6438737453715587,
+      "tecnologia": -0.0015132965844051882
     },
     "sentimiento": {
       "positivo": 0.0,
@@ -201,10 +201,10 @@
     },
     "categoria_predicha": "economia",
     "scores_categoria": {
-      "ciencia": -0.5439710308543875,
-      "economia": 0.05963736455961116,
-      "politica": -0.7089041012339276,
-      "tecnologia": -0.7241393008558614
+      "ciencia": -0.543974796107738,
+      "economia": 0.05963661605308407,
+      "politica": -0.7088636593649522,
+      "tecnologia": -0.7241240211325449
     },
     "sentimiento": {
       "positivo": 0.0,
@@ -314,10 +314,10 @@
     },
     "categoria_predicha": "ciencia",
     "scores_categoria": {
-      "ciencia": 0.3280563150246234,
-      "economia": -0.6886323882580431,
-      "politica": -0.7651422021835828,
-      "tecnologia": -0.8245445560385188
+      "ciencia": 0.3280568950473288,
+      "economia": -0.6886287746663066,
+      "politica": -0.7650960850822315,
+      "tecnologia": -0.8245254564866615
     },
     "sentimiento": {
       "positivo": 0.0,
@@ -420,10 +420,10 @@
     },
     "categoria_predicha": "tecnologia",
     "scores_categoria": {
-      "ciencia": -0.6317245408263784,
-      "economia": -0.5379390683324651,
-      "politica": -0.6431012827754543,
-      "tecnologia": -0.08570440672995433
+      "ciencia": -0.6317265199016554,
+      "economia": -0.5379400005148213,
+      "politica": -0.6430619909599586,
+      "tecnologia": -0.08568653258406422
     },
     "sentimiento": {
       "positivo": 0.0,
@@ -543,10 +543,10 @@
     },
     "categoria_predicha": "politica",
     "scores_categoria": {
-      "ciencia": -0.6861302998215644,
-      "economia": -0.7541540825425684,
-      "politica": -0.11464860381947617,
-      "tecnologia": -0.37745426912959096
+      "ciencia": -0.6861339211555506,
+      "economia": -0.7541514572953698,
+      "politica": -0.11460276773087485,
+      "tecnologia": -0.3774329656377967
     },
     "sentimiento": {
       "positivo": 0.0,
