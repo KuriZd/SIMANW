@@ -311,6 +311,44 @@ def ejecutar_detector_publicidad() -> DetectorTemasPublicidad:
     return detector
 
 
+def seleccionar_consultas_fase4(consultas_demo: list[str]) -> list[str]:
+    while True:
+        opcion = input("Usar consultas predefinidas de fase 4? (Y/N): ").strip().upper()
+        if opcion in {"Y", "N"}:
+            break
+        print("Opcion no valida. Presiona Y para usar el arreglo o N para ingresar una consulta.")
+
+    if opcion == "Y":
+        return consultas_demo
+
+    while True:
+        consulta = input("Ingresa tu consulta de busqueda: ").strip()
+        if consulta:
+            return [consulta]
+        print("La consulta no puede estar vacia.")
+
+
+def seleccionar_preguntas_fase5(preguntas_demo: list[str]) -> list[str]:
+    while True:
+        opcion = input("Usar preguntas predefinidas de fase 5? (Y/N): ").strip().upper()
+        if opcion in {"Y", "N"}:
+            break
+        print("Opcion no valida. Presiona Y para usar el arreglo o N para ingresar una pregunta.")
+
+    if opcion == "Y":
+        return preguntas_demo
+
+    preguntas = []
+    while True:
+        pregunta = input("Ingresa tu pregunta o presiona S para continuar: ").strip()
+        if pregunta.upper() == "S":
+            return preguntas
+        if pregunta:
+            preguntas.append(pregunta)
+            continue
+        print("La pregunta no puede estar vacia.")
+
+
 def ejecutar_motor_busqueda(noticias: list[dict]) -> MotorBusqueda:
     print("=== FASE 4.1: Motor de Busqueda ===\n")
 
@@ -323,13 +361,13 @@ def ejecutar_motor_busqueda(noticias: list[dict]) -> MotorBusqueda:
     print(f"  Terminos unicos: {info['terminos_en_indice']}")
     print(f"  Postings promedio: {info['tamano_promedio_posting']:.2f}")
 
-    consultas = [
+    consultas = seleccionar_consultas_fase4([
         "inteligencia artificial tecnologia",
         "mercados financieros economia",
         "datos abiertos gobierno semantica",
         "Python programacion desarrollo",
         "cambio climatico investigacion cientifica",
-    ]
+    ])
 
     print("\n--- Resultados de Busqueda ---")
     for consulta in consultas:
@@ -388,12 +426,12 @@ def ejecutar_busqueda_natural(motor: MotorBusqueda) -> BusquedaNatural:
     print("=== FASE 4.3: Busqueda en Lenguaje Natural ===\n")
 
     busqueda_nl = BusquedaNatural(motor)
-    consultas = [
+    consultas = seleccionar_consultas_fase4([
         "Muestrame noticias positivas sobre tecnologia",
         "Que noticias hay sobre datos del gobierno?",
         "Busco informacion preocupante sobre el clima",
         "Hay algo nuevo de programacion en Python?",
-    ]
+    ])
 
     for consulta in consultas:
         resultados = busqueda_nl.buscar_natural(consulta, top_k=2)
@@ -412,13 +450,13 @@ def ejecutar_chatbot(noticias: list[dict]) -> ChatbotSIMANW:
     print("=== FASE 5.1: Chatbot del SIMANW ===\n")
 
     chatbot = ChatbotSIMANW(noticias)
-    preguntas_usuario = [
+    preguntas_usuario = seleccionar_preguntas_fase5([
         "Que noticias hay sobre inteligencia artificial?",
         "Cual es el tono de la noticia de los mercados financieros?",
         "Hay algo sobre datos abiertos del gobierno?",
         "Que noticias de tecnologia tienen sentimiento positivo?",
         "Cual es la capital de Francia?",
-    ]
+    ])
 
     for pregunta in preguntas_usuario:
         respuesta, confianza = chatbot.responder(pregunta)
@@ -434,14 +472,14 @@ def ejecutar_sistema_qa(noticias: list[dict], motor: MotorBusqueda) -> SistemaQA
     print("=== FASE 5.2: Sistema Question/Answering ===\n")
 
     qa_system = SistemaQA(noticias, motor)
-    preguntas_qa = [
+    preguntas_qa = seleccionar_preguntas_fase5([
         "Cuantas noticias tienes?",
         "Cual es el sentimiento general de las noticias?",
         "Que categorias de noticias hay?",
         "Dame un resumen de las noticias",
         "Recomiendame algo sobre tecnologia",
         "Que dice la noticia sobre Python?",
-    ]
+    ])
 
     for pregunta in preguntas_qa:
         respuesta, tipo, confianza = qa_system.conversar(pregunta)
