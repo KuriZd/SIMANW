@@ -7,4 +7,6 @@ __pycache__/
 *.pyc
 .env
 .DS_Store
+data/noticias_extraidas.csv
+data/noticias_extraidas.json
 .pytest_deps/
