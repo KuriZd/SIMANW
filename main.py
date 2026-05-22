@@ -1,6 +1,7 @@
 from collections import Counter
 
 from src.busqueda_natural import BusquedaNatural
+from src.control_calidad import ControlCalidadCorpus
 from src.chatbot_qa import ChatbotSIMANW, SistemaQA
 from src.clasificador_noticias import (
     ETIQUETAS_ENTRENAMIENTO,
@@ -122,6 +123,32 @@ def ejecutar_exportacion(noticias: list[dict]) -> None:
 
     print(f"Archivo JSON generado: {ruta_json}")
     print(f"Archivo CSV generado: {ruta_csv}\n")
+
+
+def ejecutar_control_calidad(noticias: list[dict]) -> list[dict]:
+    print("=== AC-8: Control de Calidad del Corpus ===\n")
+
+    ctrl = ControlCalidadCorpus()
+    corpus_depurado = ctrl.validar(noticias)
+    informe = ctrl.generar_informe()
+
+    print(f"  Total registros       : {informe['total_registros']}")
+    print(f"  Registros válidos     : {informe['registros_validos']}")
+    print(f"  Registros rechazados  : {informe['registros_rechazados']}")
+    print(f"  Inválidos/incompletos : {informe['invalidos_o_incompletos']}")
+    print(f"  Duplicados exactos    : {informe['duplicados_exactos_url']}")
+    print(f"  Duplicados similares  : {informe['duplicados_casi_identicos_titulo']}")
+
+    if informe["detalle_rechazados"]:
+        print("\n  Registros rechazados:")
+        for entrada in informe["detalle_rechazados"]:
+            print(f"    - '{entrada['titulo'][:50]}' → {'; '.join(entrada['motivos'])}")
+
+    ruta = ctrl.guardar_informe("data/informe_calidad.json")
+    print(f"\n  Informe guardado en: {ruta}")
+    print(f"\n  Resumen:\n  {ctrl.parrafo_resumen()}\n")
+
+    return corpus_depurado
 
 
 def ejecutar_pipeline_nlp(noticias: list[dict]) -> list[dict]:
@@ -595,6 +622,7 @@ def main() -> None:
     ejecutar_parser_dom()
     noticias = ejecutar_extraccion()
     ejecutar_control_rastreo()
+    noticias = ejecutar_control_calidad(noticias)
     ejecutar_pipeline_nlp(noticias)
     representacion = ejecutar_representacion_vectorial(noticias)
     calculador = ejecutar_similitud(noticias, representacion)
