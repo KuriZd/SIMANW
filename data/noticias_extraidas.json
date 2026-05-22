@@ -94,10 +94,10 @@
     },
     "categoria_predicha": "tecnologia",
     "scores_categoria": {
-      "ciencia": -0.6325757894640822,
-      "economia": -0.6206954225121284,
-      "politica": -0.6438836195788791,
-      "tecnologia": -0.001518870982449294
+      "ciencia": -0.6325619745379221,
+      "economia": -0.6207003500337618,
+      "politica": -0.6438931719538172,
+      "tecnologia": -0.0015285231047022507
     },
     "sentimiento": {
       "positivo": 0.0,
@@ -201,10 +201,10 @@
     },
     "categoria_predicha": "economia",
     "scores_categoria": {
-      "ciencia": -0.5439804570046018,
-      "economia": 0.059639391186619095,
-      "politica": -0.7088703001986032,
-      "tecnologia": -0.7241303733450637
+      "ciencia": -0.5439737535692243,
+      "economia": 0.059643055348826024,
+      "politica": -0.7088863532356451,
+      "tecnologia": -0.7241421808993137
     },
     "sentimiento": {
       "positivo": 0.0,
@@ -314,10 +314,10 @@
     },
     "categoria_predicha": "ciencia",
     "scores_categoria": {
-      "ciencia": 0.32804499319866054,
-      "economia": -0.6886304853453722,
-      "politica": -0.7651091796254095,
-      "tecnologia": -0.8245332919931596
+      "ciencia": 0.3280596814963008,
+      "economia": -0.6886264682042059,
+      "politica": -0.765119208327137,
+      "tecnologia": -0.824547193983463
     },
     "sentimiento": {
       "positivo": 0.0,
@@ -420,10 +420,10 @@
     },
     "categoria_predicha": "tecnologia",
     "scores_categoria": {
-      "ciencia": -0.6317400938675204,
-      "economia": -0.5379387447037303,
-      "politica": -0.6430642410614242,
-      "tecnologia": -0.0856971357651709
+      "ciencia": -0.6317218340008492,
+      "economia": -0.5379413912768602,
+      "politica": -0.6430794790603891,
+      "tecnologia": -0.08570281232463389
     },
     "sentimiento": {
       "positivo": 0.0,
@@ -543,10 +543,10 @@
     },
     "categoria_predicha": "politica",
     "scores_categoria": {
-      "ciencia": -0.6861456990854966,
-      "economia": -0.7541527689020924,
-      "politica": -0.11461662392164346,
-      "tecnologia": -0.3774413092730923
+      "ciencia": -0.686127063515508,
+      "economia": -0.7541513095856913,
+      "politica": -0.11462865559510677,
+      "tecnologia": -0.3774537319463474
     },
     "sentimiento": {
       "positivo": 0.0,
