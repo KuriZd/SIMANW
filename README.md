@@ -63,6 +63,14 @@ Desde la raíz del proyecto:
 python main.py
 ```
 
+## Pruebas
+
+Ejecutar la suite de tests:
+
+```bash
+python -m pytest
+```
+
 ## Salida esperada
 
 El programa ejecuta cuatro pasos:
