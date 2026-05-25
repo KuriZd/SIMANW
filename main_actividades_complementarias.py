@@ -11,6 +11,7 @@ from src.knowledge_graph import KnowledgeGraphSIMANW
 from src.motor_busqueda import MotorBusqueda
 from src.rastreador_paginado import RastreadorPaginado, crear_fetcher_simulado
 from src.selector_modelo import ETIQUETAS_AC3, TEXTOS_AC3, SelectorModelo
+from src.tendencias_temporales import NOTICIAS_AC9_DEMO, TendenciasTemporales
 
 
 TEXTO_DISCURSO = """La educacion es la herramienta mas poderosa para transformar
@@ -243,6 +244,49 @@ def ejecutar_ac7() -> None:
     print()
 
 
+def ejecutar_ac9() -> None:
+    print("=== AC-9: Linea de Tiempo y Tendencias por Tema ===\n")
+    print("Granularidad: mensual")
+    print("Justificacion: el corpus abarca varios meses; el mes ofrece periodos")
+    print("suficientes sin fragmentar un corpus de tamano medio.\n")
+
+    analizador = TendenciasTemporales(granularidad="mes")
+    analizador.cargar_noticias(NOTICIAS_AC9_DEMO)
+
+    print("--- Visualizacion ASCII (noticias por categoria y mes) ---")
+    print(analizador.visualizacion_texto())
+    print()
+
+    print("--- Tabla Resumen ---")
+    print(f"{'Categoria':<15} {'Periodo':<12} {'Noticias':>8}")
+    print("-" * 38)
+    for fila in analizador.tabla_resumen():
+        print(f"  {fila['categoria']:<13} {fila['periodo']:<12} {fila['noticias']:>8}")
+
+    ruta = analizador.exportar_csv("data/ac9_tendencias.csv")
+    print(f"\n  Tabla exportada: {ruta}")
+
+    pico = analizador.pico_notable()
+    print(f"\n--- Pico Notable ---")
+    print(f"  Categoria: {pico['categoria']} | Periodo: {pico['periodo']} | Noticias: {pico['count']}")
+    for titulo in pico["titulos"][:3]:
+        print(f"  - {titulo[:65]}")
+
+    conteos = analizador.conteo_por_periodo()
+    categorias_top = sorted(conteos, key=lambda c: sum(conteos[c].values()), reverse=True)[:3]
+    print("\n--- Tendencias de Terminos (primer vs. ultimo periodo) ---")
+    for cat in categorias_top:
+        tend = analizador.tendencia_terminos(cat)
+        if tend["aumentan"] or tend["disminuyen"]:
+            print(f"\n  [{cat}]  {tend['primer_periodo']} -> {tend['ultimo_periodo']}")
+            print(f"  Aumentan  : {tend['aumentan'][:4]}")
+            print(f"  Disminuyen: {tend['disminuyen'][:4]}")
+
+    print()
+    print(analizador.conclusion())
+    print()
+
+
 def main() -> None:
     ejecutar_ac1()
     ejecutar_ac2()
@@ -251,6 +295,7 @@ def main() -> None:
     ejecutar_ac5()
     ejecutar_ac6()
     ejecutar_ac7()
+    ejecutar_ac9()
 
 
 if __name__ == "__main__":
