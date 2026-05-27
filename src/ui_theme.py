@@ -25,14 +25,14 @@ STATUS_HEIGHT = 34
 HEADER_HEIGHT = 82
 
 SECTIONS = [
-    ("cargar",     "Cargar noticias",    True),
-    ("dashboard",  "Dashboard",          True),
-    ("explorador", "Explorador",         True),
-    ("resultados", "Resultados NLP",     True),
-    ("busqueda",   "Búsqueda y Q&A",     False),
-    ("grafo",      "Grafo RDF",          False),
-    ("exportar",   "Exportar",           True),
+    ("dashboard", "Dashboard", True),
+    ("cargar", "Load / Analyze News", True),
+    ("resultados", "Smart Results", True),
+    ("explorador", "News Explorer", True),
+    ("busqueda", "Search & Q&A", True),
+    ("grafo", "Knowledge Graph", True),
+    ("exportar", "Reports & Exports", True),
+    ("evidencia", "Academic Evidence", True),
 ]
 
-# Alias para compatibilidad con código heredado
 PHASES = SECTIONS

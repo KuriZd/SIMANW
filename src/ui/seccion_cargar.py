@@ -150,7 +150,8 @@ class SeccionCargar(ctk.CTkFrame):
 
     def _build_pipeline_card(self, master) -> ctk.CTkFrame:
         card = self._card(master)
-        card.grid_rowconfigure(7, weight=1)
+        hint_row = len(_STEPS) + 1
+        card.grid_rowconfigure(hint_row, weight=1)
 
         ctk.CTkLabel(
             card, text="Pipeline de análisis", font=FONT_H2, text_color=THEME["text_1"]
@@ -180,7 +181,7 @@ class SeccionCargar(ctk.CTkFrame):
             anchor="w",
         )
         self._hint_label.grid(
-            row=7, column=0, columnspan=2, sticky="sw", padx=CARD_PADDING, pady=CARD_PADDING
+            row=hint_row, column=0, columnspan=2, sticky="sw", padx=CARD_PADDING, pady=CARD_PADDING
         )
         return card
 
@@ -228,6 +229,7 @@ class SeccionCargar(ctk.CTkFrame):
             self._step_icon_labels[last].configure(text=_ICON_OK, text_color=THEME["success"])
             self._step_text_labels[last].configure(text_color=THEME["text_1"])
 
+        self.root_app.simanw_service = self.service
         self.root_app.set_resultado_analisis(resultado)
         nivel = "warning" if resultado.errores else "ok"
         msg = f"{len(resultado.noticias)} noticias · {len(resultado.corpus)} documentos NLP"

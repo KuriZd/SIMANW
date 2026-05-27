@@ -73,6 +73,9 @@ class SeccionExportar(ctk.CTkFrame):
         self._build_nlp_card(scroll, rutas, corpus).grid(
             row=0, column=1, sticky="nsew", pady=(0, 12)
         )
+        self._build_generated_files_card(scroll).grid(
+            row=1, column=0, columnspan=2, sticky="ew", pady=(0, 12)
+        )
 
     def _build_raw_card(self, master, rutas: dict, noticias: list[dict]) -> ctk.CTkFrame:
         card = self._card(master)
@@ -103,6 +106,24 @@ class SeccionExportar(ctk.CTkFrame):
             fg_color=THEME["bg_input"], hover_color=THEME["border"],
             border_width=1, border_color=THEME["border"], text_color=THEME["text_1"],
         ).grid(row=7, column=0, sticky="ew", padx=CARD_PADDING, pady=(0, CARD_PADDING))
+        return card
+
+    def _build_generated_files_card(self, master) -> ctk.CTkFrame:
+        card = self._card(master)
+        ctk.CTkLabel(
+            card, text="Generated pipeline artifacts", font=FONT_H2, text_color=THEME["text_1"]
+        ).grid(row=0, column=0, sticky="w", padx=CARD_PADDING, pady=(CARD_PADDING, 8))
+
+        result = getattr(self.root_app, "resultado_actual", None)
+        archivos = list(getattr(result, "archivos_generados", []) or [])
+        if not archivos:
+            archivos = list(self.root_app.rutas_exportacion.values())
+
+        for row, ruta in enumerate(archivos, start=1):
+            ctk.CTkLabel(
+                card, text=str(ruta), font=FONT_MONO, text_color=THEME["accent"], anchor="w"
+            ).grid(row=row, column=0, sticky="w", padx=CARD_PADDING, pady=2)
+
         return card
 
     def _build_nlp_card(self, master, rutas: dict, corpus: list[dict]) -> ctk.CTkFrame:

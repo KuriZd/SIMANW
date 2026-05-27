@@ -1,165 +1,78 @@
-# SIMANW — Aplicación de escritorio
+# SIMANW Desktop App
 
-Interfaz gráfica modular para el Sistema Inteligente de Monitoreo y Análisis de Noticias Web.
+Interfaz de escritorio unificada para SIMANW. La app presenta secciones orientadas al usuario final y ejecuta internamente las fases academicas del proyecto.
 
-## Instalación y ejecución
+## Ejecutar
 
 ```powershell
-.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+python -m src.nltk_setup
 python app_desktop.py
 ```
 
----
+## Flujo basico
 
-## Modos de carga de noticias
+1. Abrir `Load / Analyze News`.
+2. Seleccionar `Demo local` para una ejecucion reproducible sin red.
+3. Presionar `Analyze News`.
+4. Revisar `Dashboard`, `Smart Results`, `News Explorer`, `Search & Q&A`, `Knowledge Graph`, `Reports & Exports` y `Academic Evidence`.
 
-La sección **Cargar noticias** ofrece tres modos de entrada:
+## Fuentes
 
-| Modo | Uso previsto | Notas |
-|------|--------------|-------|
-| Demo local | Presentaciones, pruebas offline y validación rápida | No requiere red. Siempre disponible. |
-| Fuente predefinida | Selección desde el catálogo configurado en `config/fuentes_noticias.py` | Requiere conexión. Conserva metadatos de fuente en cada noticia. |
-| URL personalizada | RSS/Atom o paginación real con URL ingresada por el usuario | Requiere conexión. Selector secundario elige RSS o Paginado. |
+| Modo | Descripcion |
+|---|---|
+| Demo local | Usa datos locales de demostracion. Es el modo recomendado para pruebas, clases y presentaciones sin internet. |
+| Predefined source | Usa el catalogo de `config/fuentes_noticias.py`: La Jornada, Aristegui Noticias, Proceso, El Heraldo de Mexico e INEGI Sala de Prensa. |
+| Custom RSS/URL | Permite ingresar una URL RSS o una URL inicial para rastreo paginado. |
+| File | Soportado en el servicio unificado mediante `source="archivo"` si se invoca programaticamente. |
 
-### Demo local
+Las fuentes externas pueden fallar por cambios de URL, feeds retirados, cambios del DOM, bloqueos de red o reglas del proveedor. La app conserva el modo demo como respaldo reproducible.
 
-Genera noticias a partir de un fragmento HTML local incluido en el código (`src/html_demo.py`). Útil para pruebas reproducibles sin dependencias externas. **No eliminarlo** — es el mecanismo de respaldo para validar el pipeline sin red.
+## Secciones de producto
 
-### Fuente predefinida
+| Seccion | Uso |
+|---|---|
+| Dashboard | Metricas generales del corpus, documentos procesados, categorias, sentimiento y grafo. |
+| Load / Analyze News | Seleccion de fuente y ejecucion del pipeline completo en segundo plano. |
+| Smart Results | Evidencia NLP, terminos frecuentes, distribuciones y resultados analiticos. |
+| News Explorer | Tabla y detalle de noticias analizadas. |
+| Search & Q&A | Busqueda inteligente y preguntas respondidas con el corpus cargado. |
+| Knowledge Graph | Resumen RDF, exportacion TTL/JSON-LD y consultas SPARQL de ejemplo. |
+| Reports & Exports | Artefactos generados y re-exportacion de datos. |
+| Academic Evidence | Estado interno por fase, advertencias, errores y lista de archivos. |
 
-Usa el catálogo `config/fuentes_noticias.py`. Las fuentes activas iniciales son:
+## Fases internas ejecutadas
 
-| ID | Nombre | Tipo |
-|----|--------|------|
-| `la_jornada` | La Jornada | RSS |
-| `aristegui_noticias` | Aristegui Noticias | RSS |
-| `proceso` | Proceso | RSS |
-| `heraldo_mexico` | El Heraldo de México | RSS |
-| `inegi_sala_prensa` | INEGI Sala de Prensa | HTML |
+1. Extraccion/rastreo con `Fase1Service`.
+2. Procesamiento NLP con `Fase2Service`.
+3. Analisis de sentimiento, clasificacion, terminos y tendencias con `Fase3Service`.
+4. Busqueda TF-IDF y lenguaje natural con `Fase4Service`.
+5. Q&A/chatbot con `Fase5Service`.
+6. Knowledge Graph RDF/SPARQL con `Fase6Service`.
+7. Reportes, manifiesto y log con `Fase7Service`.
 
-Aristegui Noticias usa los feeds de `editorial.aristeguinoticias.com`. INEGI Sala de Prensa se configura como `tipo: "html"` porque su sala de prensa requiere parser específico de DOM.
+La orquestacion vive en `src/simanw_app_service.py`; `app_desktop.py` solo administra la ventana, navegacion y estado compartido de UI.
 
-Cuando se selecciona una fuente predefinida, cada noticia normalizada incluye tres campos adicionales:
-- `fuente_nombre` — nombre legible de la fuente
-- `fuente_id` — identificador de catálogo
-- `fuente_tipo` — `"rss"` o `"html"`
+## Archivos generados
 
-Estos campos se muestran en el **Explorador de noticias** y en el **Dashboard**.
+La ejecucion completa puede generar:
 
-### URL personalizada
+- `data/raw/noticias.json`
+- `data/raw/noticias.csv`
+- `data/processed/corpus_procesado.json`
+- `data/processed/corpus_procesado.csv`
+- `outputs/analisis/reporte_analisis.json`
+- `outputs/tendencias.csv`
+- `outputs/tendencias.png`
+- `outputs/grafo/simanw_graph.ttl`
+- `outputs/grafo/simanw_graph.jsonld`
+- `outputs/reportes/reporte_final.md`
+- `outputs/runs/<run_id>/manifest.json`
+- `outputs/runs/<run_id>/pipeline_log.jsonl`
 
-Permite introducir cualquier URL RSS/Atom o la página inicial de un sitio paginado. El selector secundario define el tipo de rastreador:
-- **RSS** → `RastreadorRSS` con hasta 25 noticias.
-- **Paginado** → `RastreadorPaginado` con hasta 5 páginas.
+## Limitaciones conocidas
 
-### Fiabilidad de fuentes externas
-
-Las fuentes externas pueden fallar si el proveedor:
-- cambia la URL del feed RSS,
-- modifica la estructura del DOM,
-- bloquea solicitudes automáticas,
-- aplica restricciones de acceso o geobloqueo.
-
-En esos casos, la app registra el error en la barra de estado y **no se cierra**. El modo Demo local sigue siendo el mecanismo de respaldo para pruebas reproducibles.
-
----
-
-## Arquitectura de la UI
-
-```
-app_desktop.py                    ← ventana raíz (SIMANWDesktopApp)
-  src/ui/sidebar.py               ← barra lateral con set_active()
-  src/ui/content_header.py        ← cabecera con título y barra de progreso
-  src/ui/status_bar.py            ← barra de estado global
-  src/ui/seccion_cargar.py        ← Cargar noticias (pipeline completo)
-  src/ui/seccion_dashboard.py     ← Dashboard de estadísticas
-  src/ui/seccion_explorador.py    ← Explorador de noticias crudas
-  src/ui/seccion_resultados.py    ← Resultados NLP (corpus procesado)
-  src/ui/seccion_exportar.py      ← Exportar archivos generados
-  src/ui_theme.py                 ← tokens de color, tipografías, SECTIONS
-
-src/simanw_app_service.py         ← orquestación Fase 1 + Fase 2
-src/fase1_service.py              ← lógica de extracción y fuentes
-src/fase2_service.py              ← lógica NLP y TF-IDF
-src/fuentes_service.py            ← catálogo de fuentes predefinidas
-config/fuentes_noticias.py        ← datos del catálogo
-```
-
-El estado compartido entre secciones vive en `SIMANWDesktopApp`:
-
-| Atributo              | Tipo          | Descripción |
-|-----------------------|---------------|-------------|
-| `noticias`            | `list[dict]`  | Corpus crudo de Fase 1 |
-| `corpus_procesado`    | `list[dict]`  | Corpus NLP de Fase 2 |
-| `estadisticas_fase2`  | `dict`        | Métricas del corpus NLP |
-| `rutas_exportacion`   | `dict`        | Rutas de archivos generados |
-| `pipeline_estado`     | `dict`        | Estado de cada paso del pipeline |
-
----
-
-## Pipeline de análisis
-
-Cuando el usuario hace clic en **Analizar noticias**, `SIMANWAppService.analizar_noticias()` ejecuta automáticamente:
-
-1. **Cargando noticias…** — `Fase1Service.ejecutar(source, url)` extrae y normaliza.
-2. **Procesando texto…** — `Fase2Service.procesar_corpus(noticias)` aplica el pipeline NLP.
-3. **Extrayendo términos relevantes…** — exportación del corpus procesado a `data/processed/`.
-4. **Preparando dashboard…** — consolida el resultado en `SIMANWDesktopApp`.
-5. **¡Listo!** — navega automáticamente al Dashboard.
-
-**Archivos generados:**
-
-| Archivo | Contenido |
-|---------|-----------|
-| `data/raw/noticias.json` | Corpus crudo (Fase 1) |
-| `data/raw/noticias.csv` | Corpus crudo en CSV |
-| `data/processed/corpus_procesado.json` | Corpus NLP (Fase 2) |
-| `data/processed/corpus_procesado.csv` | Corpus NLP en CSV (listas serializadas como texto) |
-
----
-
-## Pipeline NLP (Fase 2)
-
-Aplicado automáticamente a cada noticia tras la extracción:
-
-1. **Limpieza:** normaliza a minúsculas, elimina puntuación y dígitos.
-2. **Tokenización:** `word_tokenize` NLTK (español).
-3. **Eliminación de stopwords:** lista española NLTK + tokens de longitud ≤ 2.
-4. **Stemming:** `SnowballStemmer("spanish")`.
-5. **TF-IDF:** `RepresentacionVectorial` para los términos más relevantes por documento.
-
-El corpus procesado queda disponible en **Resultados NLP** y en el **Dashboard** sin necesidad de re-ejecutar.
-
----
-
-## Navegación
-
-| Sección | Función |
-|---------|---------|
-| Cargar noticias | Selector de fuente + pipeline animado |
-| Dashboard | Estadísticas, términos frecuentes, pipeline status |
-| Explorador | Tabla y detalle de noticias crudas + exportación |
-| Resultados NLP | Corpus procesado con detalle NLP + exportación |
-| Búsqueda y Q&A | Reservada (Fase futura) |
-| Grafo RDF | Reservada (Fase futura) |
-| Exportar | Resumen de archivos generados y re-exportación |
-
-Para añadir una sección futura: crear `src/ui/seccion_X.py` e incorporar el caso en `SIMANWDesktopApp.show_section()`.
-
----
-
-## FuentesService
-
-`src/fuentes_service.py` expone:
-
-| Método | Descripción |
-|--------|-------------|
-| `listar_fuentes(activas=True)` | Lista fuentes del catálogo |
-| `obtener_fuente(id)` | Devuelve fuente por ID (KeyError si no existe) |
-| `obtener_urls(id)` | Lista de URLs de una fuente |
-| `validar_fuente(dict)` | Valida campos y tipos; devuelve `(bool, errores)` |
-| `listar_nombres_fuentes()` | Lista de nombres de fuentes activas |
-| `obtener_por_nombre(nombre)` | Búsqueda por nombre (insensible a mayúsculas) |
-
-Para añadir una fuente nueva, agregar una entrada a `FUENTES_NOTICIAS` en `config/fuentes_noticias.py` con todos los campos requeridos y `"activo": True`.
+- Los resultados con RSS/HTML reales dependen de conectividad y disponibilidad de los sitios.
+- La clasificacion usa un conjunto de entrenamiento local y debe ampliarse para produccion.
+- El sentimiento VADER es util como evidencia academica, pero no sustituye una validacion humana.
+- SPARQL local funciona con el grafo generado; endpoints externos requieren internet y politicas de acceso estables.
