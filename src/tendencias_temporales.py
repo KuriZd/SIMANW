@@ -123,6 +123,55 @@ class TendenciasTemporales:
             writer.writerows(self.tabla_resumen())
         return ruta
 
+    def exportar_png(self, ruta: str | Path = "outputs/tendencias.png") -> Path:
+        """Genera una visualizacion PNG de noticias por categoria y periodo."""
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+
+        ruta = Path(ruta)
+        ruta.parent.mkdir(parents=True, exist_ok=True)
+
+        tabla = self.tabla_resumen()
+        fig, ax = plt.subplots(figsize=(10, 5))
+        if not tabla:
+            ax.text(0.5, 0.5, "Sin datos de tendencias", ha="center", va="center")
+            ax.set_axis_off()
+        else:
+            periodos = sorted({fila["periodo"] for fila in tabla})
+            categorias = sorted({fila["categoria"] for fila in tabla})
+            ancho = 0.8 / max(len(categorias), 1)
+            posiciones = list(range(len(periodos)))
+
+            for idx, categoria in enumerate(categorias):
+                valores = [
+                    next(
+                        (
+                            fila["noticias"]
+                            for fila in tabla
+                            if fila["categoria"] == categoria and fila["periodo"] == periodo
+                        ),
+                        0,
+                    )
+                    for periodo in periodos
+                ]
+                desplazamiento = (idx - (len(categorias) - 1) / 2) * ancho
+                ax.bar([p + desplazamiento for p in posiciones], valores, width=ancho, label=categoria)
+
+            ax.set_title("Tendencias temporales por categoria")
+            ax.set_xlabel("Periodo")
+            ax.set_ylabel("Noticias")
+            ax.set_xticks(posiciones)
+            ax.set_xticklabels(periodos, rotation=30, ha="right")
+            ax.legend()
+            ax.grid(axis="y", alpha=0.25)
+
+        fig.tight_layout()
+        fig.savefig(ruta, dpi=140)
+        plt.close(fig)
+        return ruta
+
     def visualizacion_texto(self, ancho_max: int = 35) -> str:
         """Diagrama de barras ASCII por categoría y periodo."""
         conteos = self.conteo_por_periodo()

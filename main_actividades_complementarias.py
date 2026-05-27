@@ -4,14 +4,23 @@ from pathlib import Path
 
 from src.analisis_discurso import AnalisisDiscurso
 from src.analizador_hilo import HILO_IA_DEMO, AnalizadorHiloDiscusion
+from src.alertas_consulta import SistemaAlertasConsulta, consultas_demo, noticias_nuevas_demo
 from src.chatbot_contextual import CONVERSACION_AC6, ChatbotContextual
 from src.comparador_busqueda import CONSULTAS_EVAL_AC5, ComparadorModelos
+from src.control_calidad import ControlCalidadCorpus
 from src.enriquecedor_kg import enriquecer_categorias_demo
-from src.knowledge_graph import KnowledgeGraphSIMANW
+from src.knowledge_graph import (
+    QUERY_AC13_AUTORES_PRODUCTIVOS,
+    QUERY_AC13_NOTICIAS_RECIENTES_NEGATIVAS,
+    QUERY_AC13_SENTIMIENTO_POR_CATEGORIA,
+    KnowledgeGraphSIMANW,
+)
 from src.motor_busqueda import MotorBusqueda
 from src.rastreador_paginado import RastreadorPaginado, crear_fetcher_simulado
 from src.selector_modelo import ETIQUETAS_AC3, TEXTOS_AC3, SelectorModelo
 from src.tendencias_temporales import NOTICIAS_AC9_DEMO, TendenciasTemporales
+from src.trazabilidad import trazabilidad_demo
+from src.usabilidad import estudio_demo
 
 
 TEXTO_DISCURSO = """La educacion es la herramienta mas poderosa para transformar
@@ -244,6 +253,44 @@ def ejecutar_ac7() -> None:
     print()
 
 
+def _noticias_ac8_demo() -> list[dict]:
+    base = {
+        "titulo": "Avances en inteligencia artificial generativa",
+        "cuerpo": "La inteligencia artificial generativa transforma procesos de software, educacion y analisis de datos.",
+        "fecha": "2026-05-10",
+        "autor": "Maria Garcia",
+        "categoria_original": "tecnologia",
+        "url": "https://demo.test/noticias/ia",
+        "fuente": "https://demo.test",
+    }
+    return [
+        base,
+        {**base, "titulo": "Mercados reaccionan a nuevas tasas", "url": "https://demo.test/noticias/economia"},
+        {**base, "titulo": "", "url": "https://demo.test/noticias/sin-titulo"},
+        {**base, "titulo": "Cuerpo corto", "cuerpo": "corto", "url": "https://demo.test/noticias/corto"},
+        {**base, "titulo": "Fecha invalida", "fecha": "25/05/2026", "url": "https://demo.test/noticias/fecha"},
+        {**base, "titulo": "Duplicado URL", "url": "https://demo.test/noticias/ia"},
+        {**base, "url": "https://demo.test/noticias/ia-copia"},
+    ]
+
+
+def ejecutar_ac8() -> None:
+    print("=== AC-8: Control de Calidad del Corpus ===\n")
+    control = ControlCalidadCorpus()
+    depurado = control.validar(_noticias_ac8_demo())
+    ruta = control.guardar_informe("data/ac8_informe_calidad.json")
+
+    informe = control.generar_informe()
+    print(f"Total registros: {informe['total_registros']}")
+    print(f"Validos: {informe['registros_validos']} | Rechazados: {informe['registros_rechazados']}")
+    print(f"Duplicados URL: {informe['duplicados_exactos_url']}")
+    print(f"Duplicados por titulo: {informe['duplicados_casi_identicos_titulo']}")
+    print(f"Corpus depurado disponible en memoria: {len(depurado)} noticias")
+    print(f"Informe generado: {ruta}")
+    print(control.parrafo_resumen())
+    print()
+
+
 def ejecutar_ac9() -> None:
     print("=== AC-9: Linea de Tiempo y Tendencias por Tema ===\n")
     print("Granularidad: mensual")
@@ -287,6 +334,107 @@ def ejecutar_ac9() -> None:
     print()
 
 
+def ejecutar_ac10() -> None:
+    print("=== AC-10: Alertas por Consulta Guardada ===\n")
+    sistema = SistemaAlertasConsulta(consultas_demo())
+    sistema.guardar_consultas("data/ac10_consultas_guardadas.json")
+
+    sin_nuevas = sistema.procesar_noticias_nuevas([])
+    con_nuevas = sistema.procesar_noticias_nuevas(noticias_nuevas_demo(), "2026-05-25T12:00:00Z")
+    repetidas = sistema.procesar_noticias_nuevas(noticias_nuevas_demo(), "2026-05-25T12:05:00Z")
+    sistema.guardar_historial("data/ac10_historial_alertas.json")
+
+    print(f"Consultas persistidas: {len(sistema.consultas)}")
+    print(f"Ejecucion sin noticias nuevas: {len(sin_nuevas)} alertas")
+    print(f"Ejecucion con cinco noticias nuevas: {len(con_nuevas)} alertas")
+    print(f"Reprocesamiento de las mismas noticias: {len(repetidas)} alertas duplicadas")
+    print(sistema.documentar_deduplicacion())
+    print()
+
+
+def ejecutar_ac11() -> None:
+    print("=== AC-11: Estudio de Usabilidad ===\n")
+    estudio = estudio_demo()
+    ruta = estudio.exportar_csv("data/ac11_resultados_usabilidad.csv")
+
+    print("Tareas del guion:")
+    for idx, tarea in enumerate(estudio.tareas, start=1):
+        print(f"  {idx}. {tarea}")
+    print("\nPromedios del cuestionario:")
+    for item, promedio in estudio.promedios().items():
+        print(f"  {item}: {promedio}")
+    print("\nProblemas y mejoras:")
+    for item in estudio.problemas_y_mejoras():
+        print(f"  - {item['problema']} -> {item['mejora']}")
+    print(f"\nResultados exportados: {ruta}")
+    print(estudio.reflexion_consentimiento())
+    print()
+
+
+def ejecutar_ac12() -> None:
+    print("=== AC-12: Trazabilidad y Reproducibilidad ===\n")
+    traza = trazabilidad_demo()
+    archivos = {
+        "rastreo_paginado": "data/ac1_noticias_paginadas.json",
+        "calidad": "data/ac8_informe_calidad.json",
+        "tendencias": "data/ac9_tendencias.csv",
+        "consultas_guardadas": "data/ac10_consultas_guardadas.json",
+        "historial_alertas": "data/ac10_historial_alertas.json",
+        "usabilidad": "data/ac11_resultados_usabilidad.csv",
+    }
+    ruta_manifest = traza.guardar_manifiesto("data/ac12_manifiesto.json", archivos)
+    ruta_log = traza.guardar_log_jsonl("data/ac12_log.jsonl")
+
+    print(f"Manifiesto: {ruta_manifest}")
+    print(f"Log estructurado: {ruta_log}")
+    print(traza.procedimiento_reproducible())
+    print("\nChecklist:")
+    print(traza.checklist_firmado("Alumno SIMANW"))
+    print("\nAnexo de limitaciones:")
+    print(traza.anexo_limitaciones())
+    print()
+
+
+def ejecutar_ac13() -> None:
+    print("=== AC-13: Publicacion Semantica y Validacion RDF ===\n")
+    kg = KnowledgeGraphSIMANW()
+    noticias_kg = []
+    for indice, noticia in enumerate(NOTICIAS_AC9_DEMO[:6], start=1):
+        noticias_kg.append(
+            {
+                **noticia,
+                "autor": f"Autor {indice % 3}",
+                "fuente": "https://demo.test",
+                "url": f"https://demo.test/kg/{indice}",
+                "sentimiento": {
+                    "etiqueta": "positivo" if indice % 2 else "negativo",
+                    "compound": 0.4 if indice % 2 else -0.3,
+                },
+            }
+        )
+    kg.construir_desde_noticias(noticias_kg)
+    enlaces = kg.agregar_enlaces_externos_basicos()
+    rutas = kg.exportar_rdf("data/ac13_simanw")
+    validacion = kg.validar_formas()
+
+    print(f"Triples RDF: {kg.total_triples()}")
+    print(f"Exportaciones: {rutas['turtle']} y {rutas['json-ld']}")
+    print(f"Enlaces externos documentados: {len(enlaces)}")
+    print(f"Validacion conforme: {validacion['conforme']} | Violaciones: {len(validacion['violaciones'])}")
+    print("\nConsultas SPARQL propias:")
+    for nombre, query in [
+        ("Autores productivos", QUERY_AC13_AUTORES_PRODUCTIVOS),
+        ("Sentimiento por categoria", QUERY_AC13_SENTIMIENTO_POR_CATEGORIA),
+        ("Noticias negativas recientes", QUERY_AC13_NOTICIAS_RECIENTES_NEGATIVAS),
+    ]:
+        print(f"  {nombre}: {len(kg.consultar(query))} fila(s)")
+    print("\nFragmento JSON-LD de ejemplo:")
+    print(kg.fragmento_jsonld_noticia(1))
+    print("\nReutilizacion externa:")
+    print(kg.nota_reutilizacion_datos())
+    print()
+
+
 def main() -> None:
     ejecutar_ac1()
     ejecutar_ac2()
@@ -295,7 +443,12 @@ def main() -> None:
     ejecutar_ac5()
     ejecutar_ac6()
     ejecutar_ac7()
+    ejecutar_ac8()
     ejecutar_ac9()
+    ejecutar_ac10()
+    ejecutar_ac11()
+    ejecutar_ac12()
+    ejecutar_ac13()
 
 
 if __name__ == "__main__":

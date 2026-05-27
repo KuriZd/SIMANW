@@ -83,9 +83,12 @@ class MotorBusqueda:
                     "doc_id": int(indice),
                     "titulo": documento["titulo"],
                     "relevancia": relevancia,
+                    "score": relevancia,
                     "categoria": documento.get("categoria_predicha", documento.get("categoria_original", "?")),
                     "sentimiento": documento.get("sentimiento", {}).get("etiqueta", "?"),
                     "snippet": self._snippet(documento["cuerpo"]),
+                    "fecha": documento.get("fecha", ""),
+                    "url": documento.get("url", ""),
                 }
             )
 

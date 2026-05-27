@@ -1,0 +1,35 @@
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix simanw: <http://simanw.org/ontology/> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+simanw:NoticiaShape
+    a sh:NodeShape ;
+    sh:targetClass simanw:Noticia ;
+    sh:property [
+        sh:path dc:title ;
+        sh:minCount 1 ;
+        sh:message "Cada noticia debe tener titulo." ;
+    ] ;
+    sh:property [
+        sh:path dc:date ;
+        sh:minCount 1 ;
+        sh:datatype xsd:date ;
+        sh:message "Cada noticia debe tener fecha xsd:date." ;
+    ] ;
+    sh:property [
+        sh:path simanw:tieneAutor ;
+        sh:minCount 1 ;
+        sh:message "Cada noticia debe enlazar a un autor." ;
+    ] ;
+    sh:property [
+        sh:path simanw:tieneCategoria ;
+        sh:minCount 1 ;
+        sh:message "Cada noticia debe enlazar a una categoria." ;
+    ] ;
+    sh:property [
+        sh:path simanw:urlOriginal ;
+        sh:minCount 1 ;
+        sh:datatype xsd:anyURI ;
+        sh:message "Cada noticia debe conservar su URL original." ;
+    ] .

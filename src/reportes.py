@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import datetime
+from pathlib import Path
+
+from src.exportador import guardar_markdown
 
 
 class GeneradorReportes:
@@ -78,6 +81,122 @@ class GeneradorReportes:
         lineas.append("=" * 70)
 
         return "\n".join(lineas)
+
+    def reporte_markdown(
+        self,
+        tendencias: dict | None = None,
+        consultas_busqueda: list[dict] | None = None,
+        respuestas_chatbot: list[dict] | None = None,
+        generado_en: datetime | None = None,
+    ) -> str:
+        """Genera el reporte final en Markdown para entrega reproducible."""
+        fecha = generado_en or datetime.now()
+        categorias = Counter(self._categoria(noticia) for noticia in self.noticias)
+        sentimientos = Counter(
+            noticia["sentimiento"]["etiqueta"] for noticia in self.noticias if "sentimiento" in noticia
+        )
+        scores = [noticia["sentimiento"]["compound"] for noticia in self.noticias if "sentimiento" in noticia]
+        promedio = sum(scores) / len(scores) if scores else 0.0
+
+        lineas = [
+            "# Reporte final SIMANW",
+            "",
+            f"Generado: {fecha.strftime('%Y-%m-%d %H:%M:%S')}",
+            "",
+            "## Resumen del corpus",
+            "",
+            f"- Noticias procesadas: {len(self.noticias)}",
+            f"- Categorias detectadas: {len(categorias)}",
+            f"- Sentimiento promedio: {promedio:+.3f}",
+            f"- Tono general: {self._tono_general(promedio)}",
+            f"- Triples RDF: {self.kg.total_triples()}",
+            "",
+            "## Noticias por categoria",
+            "",
+            "| Categoria | Noticias |",
+            "|---|---:|",
+        ]
+        for categoria, total in categorias.most_common():
+            lineas.append(f"| {categoria} | {total} |")
+
+        lineas.extend(["", "## Analisis de sentimiento", "", "| Sentimiento | Noticias |", "|---|---:|"])
+        for etiqueta, total in sentimientos.most_common():
+            lineas.append(f"| {etiqueta} | {total} |")
+
+        lineas.extend(["", "## Tendencias", ""])
+        if tendencias:
+            lineas.append(f"Granularidad: {tendencias.get('granularidad', 'N/D')}")
+            lineas.append("")
+            lineas.append("| Categoria | Periodo | Noticias |")
+            lineas.append("|---|---|---:|")
+            for fila in tendencias.get("tabla", []):
+                lineas.append(f"| {fila['categoria']} | {fila['periodo']} | {fila['noticias']} |")
+            conclusion = tendencias.get("conclusion")
+            if conclusion:
+                lineas.extend(["", conclusion])
+        else:
+            lineas.append("No se generaron tendencias para este corpus.")
+
+        lineas.extend(["", "## Consultas de busqueda", ""])
+        if consultas_busqueda:
+            for item in consultas_busqueda:
+                lineas.append(f"### {item['consulta']}")
+                resultados = item.get("resultados", [])
+                if not resultados:
+                    lineas.append("Sin resultados.")
+                for resultado in resultados:
+                    lineas.append(
+                        f"- [{resultado.get('score', resultado.get('relevancia', 0.0)):.3f}] "
+                        f"{resultado.get('titulo', '')} "
+                        f"({resultado.get('categoria', '?')}, {resultado.get('fecha', '')})"
+                    )
+        else:
+            lineas.append("No se registraron consultas de busqueda.")
+
+        lineas.extend(["", "## Resultados del chatbot", ""])
+        if respuestas_chatbot:
+            for item in respuestas_chatbot:
+                lineas.append(f"- Pregunta: {item['pregunta']}")
+                lineas.append(f"  Respuesta: {item['respuesta']}")
+        else:
+            lineas.append("No se registraron respuestas del chatbot.")
+
+        lineas.extend(
+            [
+                "",
+                "## Resumen del grafo RDF",
+                "",
+                f"- Total de triples: {self.kg.total_triples()}",
+                "- Serializaciones generadas: Turtle y JSON-LD.",
+                "- Consultable mediante SPARQL con prefijos SIMANW, Dublin Core, FOAF y Schema.org.",
+                "",
+                "## Conclusiones",
+                "",
+                "El pipeline integra rastreo o carga de corpus, depuracion, procesamiento NLP, "
+                "clasificacion, sentimiento, busqueda, Q&A, grafo RDF y reportes. Los artefactos "
+                "generados permiten reproducir la ejecucion y auditar cada etapa sin depender "
+                "unicamente de salidas por consola.",
+                "",
+            ]
+        )
+
+        return "\n".join(lineas)
+
+    def guardar_reporte_markdown(
+        self,
+        ruta: str | Path = "outputs/reportes/reporte_final.md",
+        tendencias: dict | None = None,
+        consultas_busqueda: list[dict] | None = None,
+        respuestas_chatbot: list[dict] | None = None,
+        generado_en: datetime | None = None,
+    ) -> Path:
+        contenido = self.reporte_markdown(
+            tendencias=tendencias,
+            consultas_busqueda=consultas_busqueda,
+            respuestas_chatbot=respuestas_chatbot,
+            generado_en=generado_en,
+        )
+        return guardar_markdown(contenido, ruta)
 
     @staticmethod
     def _categoria(noticia: dict) -> str:

@@ -1,0 +1,15 @@
+# Pregunta de negocio: ¿Qué autores publicaron más noticias en el corpus?
+# Archivo RDF:        data/ac13_simanw.ttl
+# Resultado esperado: lista de autores ordenada por número de publicaciones descendente
+
+PREFIX simanw: <http://simanw.org/ontology/>
+PREFIX foaf:   <http://xmlns.com/foaf/0.1/>
+
+SELECT ?autor (COUNT(?noticia) AS ?total)
+WHERE {
+    ?noticia a simanw:Noticia ;
+             simanw:tieneAutor ?autor_uri .
+    ?autor_uri foaf:name ?autor .
+}
+GROUP BY ?autor
+ORDER BY DESC(?total)

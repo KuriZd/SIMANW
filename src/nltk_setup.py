@@ -7,6 +7,8 @@ RECURSOS_NLTK = {
     "tokenizers/punkt": "punkt",
     "tokenizers/punkt_tab": "punkt_tab",
     "corpora/stopwords": "stopwords",
+    "corpora/wordnet": "wordnet",
+    "taggers/averaged_perceptron_tagger": "averaged_perceptron_tagger",
     "sentiment/vader_lexicon.zip": "vader_lexicon",
 }
 

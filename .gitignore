@@ -9,4 +9,12 @@ __pycache__/
 .DS_Store
 data/noticias_extraidas.csv
 data/noticias_extraidas.json
+data/raw/
+data/processed/
+data/ac*.json
+data/ac*.jsonl
+data/ac*.csv
+data/ac*.ttl
+data/ac*.jsonld
+outputs/
 .pytest_deps/

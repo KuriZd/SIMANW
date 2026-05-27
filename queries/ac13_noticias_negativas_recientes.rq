@@ -1,0 +1,16 @@
+# Pregunta de negocio: ¿Qué noticias recientes tienen sentimiento negativo?
+# Archivo RDF:        data/ac13_simanw.ttl
+# Resultado esperado: noticias con score < 0, ordenadas por fecha descendente (más recientes primero)
+
+PREFIX simanw: <http://simanw.org/ontology/>
+PREFIX dc:     <http://purl.org/dc/elements/1.1/>
+
+SELECT ?titulo ?fecha ?score
+WHERE {
+    ?noticia a simanw:Noticia ;
+             dc:title  ?titulo ;
+             dc:date   ?fecha ;
+             simanw:sentimientoScore ?score .
+    FILTER(?score < 0)
+}
+ORDER BY DESC(?fecha)
