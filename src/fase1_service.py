@@ -1,0 +1,221 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Literal
+from urllib.parse import urlparse
+
+from src.exportador import guardar_csv, guardar_json
+from src.extractor import ExtractorNoticias
+from src.fuentes_service import FuentesService
+from src.html_demo import html_portal_noticias
+from src.rastreador_paginado import RastreadorPaginado, crear_fetcher_simulado
+from src.rastreador_rss import RastreadorRSS
+
+
+FuenteFase1 = Literal["demo", "rss", "paginado", "predefinida"]
+
+
+@dataclass
+class ResultadoFase1:
+    noticias: list[dict]
+    fuente: FuenteFase1
+    errores: list[str]
+
+
+class Fase1Service:
+    """Orquesta solo la Fase 1: extraccion/rastreo y exportacion cruda."""
+
+    def __init__(
+        self,
+        ruta_json: str | Path = "data/raw/noticias.json",
+        ruta_csv: str | Path = "data/raw/noticias.csv",
+    ) -> None:
+        self.ruta_json = Path(ruta_json)
+        self.ruta_csv = Path(ruta_csv)
+        self.fuentes_service = FuentesService()
+        self.noticias: list[dict] = []
+        self.errores: list[str] = []
+
+    def ejecutar(self, fuente: FuenteFase1, url: str = "") -> ResultadoFase1:
+        """Ejecuta la fuente indicada y deja las noticias normalizadas en memoria."""
+        fuente = self._normalizar_fuente(fuente)
+        self.errores = []
+
+        if fuente == "demo":
+            noticias = self._extraer_demo()
+        elif fuente == "rss":
+            noticias = self._extraer_rss(url)
+        elif fuente == "paginado":
+            noticias = self._rastrear_paginado(url)
+        elif fuente == "predefinida":
+            noticias = self.ejecutar_fuente_predefinida(url)
+        else:
+            raise ValueError(f"Fuente no soportada: {fuente}")
+
+        if fuente == "predefinida":
+            self.noticias = noticias
+        else:
+            self.noticias = [self._normalizar_noticia(noticia, idx) for idx, noticia in enumerate(noticias, start=1)]
+        return ResultadoFase1(noticias=self.noticias, fuente=fuente, errores=self.errores)
+
+    def ejecutar_demo(self) -> ResultadoFase1:
+        return self.ejecutar("demo")
+
+    def ejecutar_rss(self, url: str) -> ResultadoFase1:
+        return self.ejecutar("rss", url)
+
+    def ejecutar_paginado(self, url: str = "") -> ResultadoFase1:
+        return self.ejecutar("paginado", url)
+
+    def ejecutar_fuente_predefinida(self, fuente_id: str) -> list[dict]:
+        fuente = self.fuentes_service.obtener_fuente(fuente_id)
+        valida, errores = self.fuentes_service.validar_fuente(fuente)
+        if not valida:
+            raise ValueError(f"Fuente predefinida invalida: {'; '.join(errores)}")
+
+        self.errores = []
+        noticias_raw: list[dict] = []
+        tipo = fuente["tipo"]
+        limite_total = int(fuente.get("limite_noticias", 20))
+        urls = list(fuente.get("urls", []))
+
+        if tipo == "rss":
+            for url in urls:
+                if len(noticias_raw) >= limite_total:
+                    break
+                rastreador = RastreadorRSS(
+                    url,
+                    categoria_default=fuente["id"],
+                    max_noticias=max(limite_total - len(noticias_raw), 1),
+                )
+                noticias_url = rastreador.extraer()
+                noticias_raw.extend(noticias_url)
+                self.errores.extend(rastreador.errores)
+        elif tipo == "html":
+            for url in urls:
+                if len(noticias_raw) >= limite_total:
+                    break
+                noticias_raw.extend(self._rastrear_paginado(url))
+        else:
+            raise ValueError(f"Tipo de fuente no soportado: {tipo}")
+
+        noticias_norm = [
+            self._normalizar_noticia(noticia, idx, fuente)
+            for idx, noticia in enumerate(noticias_raw[:limite_total], start=1)
+        ]
+        self.noticias = noticias_norm
+        return noticias_norm
+
+    def exportar(self) -> tuple[Path, Path]:
+        """Exporta el ultimo resultado normalizado a JSON y CSV."""
+        return self.exportar_todo(self.noticias)
+
+    def exportar_json(self, noticias: list[dict] | None = None) -> Path:
+        self.noticias = noticias if noticias is not None else self.noticias
+        return guardar_json(self.noticias, self.ruta_json)
+
+    def exportar_csv(self, noticias: list[dict] | None = None) -> Path:
+        self.noticias = noticias if noticias is not None else self.noticias
+        return guardar_csv(self.noticias, self.ruta_csv)
+
+    def exportar_todo(self, noticias: list[dict] | None = None) -> tuple[Path, Path]:
+        self.noticias = noticias if noticias is not None else self.noticias
+        json_path = self.exportar_json(self.noticias)
+        csv_path = self.exportar_csv(self.noticias)
+        return json_path, csv_path
+
+    def _extraer_demo(self) -> list[dict]:
+        extractor = ExtractorNoticias()
+        noticias = extractor.extraer_de_html(html_portal_noticias, url_base="https://portal-noticias.com")
+        self.errores.extend(extractor.errores)
+        return noticias
+
+    def _extraer_rss(self, url: str) -> list[dict]:
+        if not url.strip():
+            raise ValueError("La fuente RSS requiere una URL.")
+        rastreador = RastreadorRSS(url.strip(), max_noticias=25)
+        noticias = rastreador.extraer()
+        self.errores.extend(rastreador.errores)
+        return noticias
+
+    def _rastrear_paginado(self, url: str) -> list[dict]:
+        url = url.strip()
+        if url:
+            rastreador = RastreadorPaginado(
+                url_base=url,
+                selector_articulos="article",
+                selector_siguiente="a.next-page",
+                delay=3,
+                max_paginas=5,
+                respetar_robots=True,
+            )
+        else:
+            rastreador = RastreadorPaginado(
+                url_base="https://ejemplo-noticias.com/noticias?page=1",
+                selector_articulos="article",
+                selector_siguiente="a.next-page",
+                delay=0,
+                max_paginas=4,
+                fetcher=crear_fetcher_simulado(noticias_por_pagina=5, total_paginas=4),
+                respetar_robots=False,
+            )
+
+        noticias = rastreador.rastrear(minimo_noticias=20 if not url else None)
+        if not noticias:
+            self.errores.append("No se extrajeron noticias del rastreo paginado.")
+        return noticias
+
+    @staticmethod
+    def _normalizar_noticia(noticia: dict, indice: int, fuente: dict | None = None) -> dict:
+        titulo = str(noticia.get("titulo") or f"Noticia {indice}").strip()
+        cuerpo = str(noticia.get("cuerpo") or noticia.get("resumen") or titulo).strip()
+        fecha = str(noticia.get("fecha") or "").strip()[:10] or "sin_fecha"
+        autor = str(noticia.get("autor") or "Autor desconocido").strip()
+        categoria = str(
+            noticia.get("categoria")
+            or noticia.get("categoria_original")
+            or noticia.get("category")
+            or "sin_categoria"
+        ).strip()
+        url = str(noticia.get("url") or noticia.get("link") or "").strip()
+        if not url:
+            url = f"https://simanw.local/fase1/noticia/{indice}"
+
+        normalizada = {
+            "titulo": titulo,
+            "cuerpo": cuerpo,
+            "fecha": fecha,
+            "autor": autor,
+            "categoria": categoria,
+            "url": url,
+        }
+        if fuente:
+            normalizada.update(
+                {
+                    "fuente_nombre": fuente["nombre"],
+                    "fuente_id": fuente["id"],
+                    "fuente_tipo": fuente["tipo"],
+                }
+            )
+        return normalizada
+
+    @staticmethod
+    def _normalizar_fuente(fuente: str) -> FuenteFase1:
+        valor = fuente.strip().lower()
+        alias = {
+            "demo": "demo",
+            "rss": "rss",
+            "paginado": "paginado",
+            "predefinida": "predefinida",
+            "fuente predefinida": "predefinida",
+            "rastreo paginado": "paginado",
+        }
+        if valor not in alias:
+            raise ValueError("Fuente valida: demo, rss o paginado.")
+        return alias[valor]  # type: ignore[return-value]
+
+
+def dominio_desde_url(url: str) -> str:
+    parsed = urlparse(url)
+    return parsed.netloc or url
