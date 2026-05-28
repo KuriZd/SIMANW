@@ -73,8 +73,11 @@ class SeccionExportar(ctk.CTkFrame):
         self._build_nlp_card(scroll, rutas, corpus).grid(
             row=0, column=1, sticky="nsew", pady=(0, 12)
         )
-        self._build_generated_files_card(scroll).grid(
+        self._build_analysis_card(scroll, rutas).grid(
             row=1, column=0, columnspan=2, sticky="ew", pady=(0, 12)
+        )
+        self._build_generated_files_card(scroll).grid(
+            row=2, column=0, columnspan=2, sticky="ew", pady=(0, 12)
         )
 
     def _build_raw_card(self, master, rutas: dict, noticias: list[dict]) -> ctk.CTkFrame:
@@ -106,6 +109,49 @@ class SeccionExportar(ctk.CTkFrame):
             fg_color=THEME["bg_input"], hover_color=THEME["border"],
             border_width=1, border_color=THEME["border"], text_color=THEME["text_1"],
         ).grid(row=7, column=0, sticky="ew", padx=CARD_PADDING, pady=(0, CARD_PADDING))
+        return card
+
+    def _build_analysis_card(self, master, rutas: dict) -> ctk.CTkFrame:
+        card = self._card(master)
+        ctk.CTkLabel(
+            card, text="Reports & analysis artifacts", font=FONT_H2, text_color=THEME["text_1"]
+        ).grid(row=0, column=0, sticky="w", padx=CARD_PADDING, pady=(CARD_PADDING, 4))
+        claves = [
+            ("analisis_json", "Analisis JSON"),
+            ("ac8_informe_json", "AC-8 calidad"),
+            ("ac8_corpus_depurado", "AC-8 corpus depurado"),
+            ("ac8_rechazados", "AC-8 rechazados"),
+            ("resultados_ac3_json", "AC-3 JSON"),
+            ("resultados_ac5_json", "AC-5 JSON"),
+            ("tendencias_csv", "AC-9 tendencias CSV"),
+            ("tendencias_png", "AC-9 tendencias PNG"),
+            ("ac10_consultas", "AC-10 consultas"),
+            ("ac10_historial", "AC-10 historial"),
+            ("ac11_csv", "AC-11 usabilidad CSV"),
+            ("ac12_manifest", "AC-12 manifiesto"),
+            ("ac12_log", "AC-12 log"),
+            ("ac12_checklist", "AC-12 checklist"),
+            ("ac12_limitaciones", "AC-12 limitaciones"),
+            ("kg_enriquecido_ac7_ttl", "AC-7 Turtle"),
+            ("enlaces_wikidata_ac7_json", "AC-7 JSON"),
+            ("ac13_turtle", "AC-13 Turtle"),
+            ("ac13_jsonld", "AC-13 JSON-LD"),
+            ("ac13_validacion", "AC-13 SHACL"),
+            ("ac13_glosario", "AC-13 glosario"),
+            ("reporte_final", "Reporte final MD"),
+            ("reporte_final_json", "Reporte final JSON"),
+            ("academic_evidence", "Academic Evidence"),
+            ("ac3_modelo", "Modelo AC-3"),
+            ("ac3_vectorizer", "Vectorizer AC-3"),
+        ]
+        for row, (key, label) in enumerate(claves, start=1):
+            ruta = rutas.get(key, "-")
+            ctk.CTkLabel(card, text=f"{label}:", font=FONT_META, text_color=THEME["text_2"]).grid(
+                row=row * 2 - 1, column=0, sticky="w", padx=CARD_PADDING
+            )
+            ctk.CTkLabel(card, text=str(ruta), font=FONT_MONO, text_color=THEME["accent"], anchor="w").grid(
+                row=row * 2, column=0, sticky="w", padx=CARD_PADDING, pady=(0, 6)
+            )
         return card
 
     def _build_generated_files_card(self, master) -> ctk.CTkFrame:

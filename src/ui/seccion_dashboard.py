@@ -1,48 +1,37 @@
-"""Sección 'Dashboard' — resumen estadístico del último análisis."""
 from __future__ import annotations
 
 from collections import Counter
 
 import customtkinter as ctk
 
-from src.ui_theme import CARD_PADDING, CARD_RADIUS, FONT_BODY, FONT_H1, FONT_H2, FONT_META, THEME
+from src.ui_theme import CARD_PADDING, CARD_RADIUS, FONT_BODY, FONT_H1, FONT_H2, FONT_META, FONT_STAT, FONT_STAT_LARGE, THEME
 
 
 class SeccionDashboard(ctk.CTkFrame):
-    """Panel de resumen: estadísticas, términos más frecuentes y estado del pipeline."""
+    """Panel de resumen con estado real del pipeline SIMANW."""
 
     def __init__(self, master, root_app) -> None:
         super().__init__(master, fg_color=THEME["bg_base"], corner_radius=0)
         self.root_app = root_app
         self._build()
 
-    # ═══════════════════════════════════════════════════════════════════════════
-    # Layout
-    # ═══════════════════════════════════════════════════════════════════════════
-
     def _build(self) -> None:
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
-
         if not self.root_app.noticias:
             self._build_empty_state()
         else:
             self._build_dashboard()
 
     def _card(self, master) -> ctk.CTkFrame:
-        f = ctk.CTkFrame(master, fg_color=THEME["bg_surface"], corner_radius=CARD_RADIUS)
-        f.grid_columnconfigure(0, weight=1)
-        return f
-
-    # ── estado vacío ──────────────────────────────────────────────────────────
+        frame = ctk.CTkFrame(master, fg_color=THEME["bg_surface"], corner_radius=CARD_RADIUS)
+        frame.grid_columnconfigure(0, weight=1)
+        return frame
 
     def _build_empty_state(self) -> None:
         center = ctk.CTkFrame(self, fg_color=THEME["bg_base"], corner_radius=0)
         center.grid(row=0, column=0)
-
-        ctk.CTkLabel(
-            center, text="Sin datos", font=FONT_H1, text_color=THEME["text_2"]
-        ).grid(row=0, column=0, pady=(0, 8))
+        ctk.CTkLabel(center, text="Sin datos", font=FONT_H1, text_color=THEME["text_2"]).grid(row=0, column=0, pady=(0, 8))
         ctk.CTkLabel(
             center,
             text="Carga y analiza noticias para ver el dashboard.",
@@ -58,180 +47,202 @@ class SeccionDashboard(ctk.CTkFrame):
             text_color=THEME["text_1"],
         ).grid(row=2, column=0)
 
-    # ── dashboard con datos ───────────────────────────────────────────────────
-
     def _build_dashboard(self) -> None:
-        noticias   = self.root_app.noticias
-        corpus     = self.root_app.corpus_procesado
-        stats      = self.root_app.estadisticas_fase2
-        pipeline   = self.root_app.pipeline_estado
+        noticias = self.root_app.noticias
+        corpus = self.root_app.corpus_procesado
+        stats = self.root_app.estadisticas_fase2
+        pipeline = self.root_app.pipeline_estado
+        resultado = getattr(self.root_app, "resultado_actual", None)
+        grafo_info = getattr(resultado, "grafo_info", {}) if resultado else {}
 
-        scroll = ctk.CTkScrollableFrame(
-            self, fg_color=THEME["bg_base"], corner_radius=0
-        )
+        scroll = ctk.CTkScrollableFrame(self, fg_color=THEME["bg_base"], corner_radius=0)
         scroll.grid(row=0, column=0, sticky="nsew", padx=18, pady=12)
-        scroll.grid_columnconfigure(0, weight=1)
-        scroll.grid_columnconfigure(1, weight=1)
-        scroll.grid_columnconfigure(2, weight=1)
-        scroll.grid_columnconfigure(3, weight=1)
+        for col in range(4):
+            scroll.grid_columnconfigure(col, weight=1)
 
-        # ── fila 1: tarjetas de stats ──────────────────────────────────────
         stat_items = [
-            ("Noticias",       str(len(noticias))),
-            ("Tokens totales", str(stats.get("total_tokens", "—"))),
-            ("Vocabulario",    str(stats.get("vocabulario_total", "—"))),
-            ("Tokens / doc",   _fmt_float(stats.get("promedio_tokens_doc"))),
+            ("Noticias", str(len(noticias))),
+            ("Tokens totales", str(stats.get("total_tokens", "-"))),
+            ("Sentimiento", _fmt_float(_sentimiento_promedio(noticias))),
+            ("Triples RDF", str(grafo_info.get("total_triples", "-"))),
         ]
         for col, (label, value) in enumerate(stat_items):
             self._build_stat_card(scroll, label, value).grid(
-                row=0, column=col, sticky="nsew", padx=(0 if col else 0, 10 if col < 3 else 0), pady=(0, 12)
+                row=0,
+                column=col,
+                sticky="nsew",
+                padx=(0, 10 if col < 3 else 0),
+                pady=(0, 12),
             )
 
-        # ── fila 2: términos frecuentes + pipeline ─────────────────────────
-        terminos_card = self._build_terminos_card(scroll, corpus)
-        terminos_card.grid(row=1, column=0, columnspan=2, sticky="nsew", padx=(0, 10), pady=(0, 12))
+        self._build_terminos_card(scroll, corpus).grid(row=1, column=0, columnspan=2, sticky="nsew", padx=(0, 10), pady=(0, 12))
+        self._build_pipeline_card(scroll, pipeline).grid(row=1, column=2, columnspan=2, sticky="nsew", pady=(0, 12))
+        self._build_fuentes_card(scroll, noticias).grid(row=2, column=0, columnspan=4, sticky="ew", pady=(0, 12))
+        self._build_categorias_card(scroll, noticias).grid(row=3, column=0, columnspan=4, sticky="ew", pady=(0, 12))
 
-        pipeline_card = self._build_pipeline_card(scroll, pipeline)
-        pipeline_card.grid(row=1, column=2, columnspan=2, sticky="nsew", pady=(0, 12))
-
-        # ── fila 3: fuentes + categorías ────────────────────────────────────
-        fuentes_card = self._build_fuentes_card(scroll, noticias)
-        fuentes_card.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(0, 12))
-
-        categorias_card = self._build_categorias_card(scroll, noticias)
-        categorias_card.grid(row=3, column=0, columnspan=4, sticky="ew")
+        analisis = getattr(resultado, "analisis", {}) if resultado else {}
+        self._build_sentimientos_card(scroll, noticias, analisis).grid(row=4, column=0, columnspan=4, sticky="ew")
 
     def _build_stat_card(self, master, label: str, value: str) -> ctk.CTkFrame:
         card = self._card(master)
-        ctk.CTkLabel(
-            card, text=value, font=("Segoe UI", 22, "bold"), text_color=THEME["accent"]
-        ).grid(row=0, column=0, padx=CARD_PADDING, pady=(CARD_PADDING, 2))
-        ctk.CTkLabel(
-            card, text=label, font=FONT_META, text_color=THEME["text_2"]
-        ).grid(row=1, column=0, padx=CARD_PADDING, pady=(0, CARD_PADDING))
+        ctk.CTkLabel(card, text=value, font=FONT_STAT_LARGE, text_color=THEME["accent"]).grid(
+            row=0, column=0, padx=CARD_PADDING, pady=(CARD_PADDING, 2)
+        )
+        ctk.CTkLabel(card, text=label, font=FONT_META, text_color=THEME["text_2"]).grid(
+            row=1, column=0, padx=CARD_PADDING, pady=(0, CARD_PADDING)
+        )
         return card
 
     def _build_terminos_card(self, master, corpus: list[dict]) -> ctk.CTkFrame:
         card = self._card(master)
-        ctk.CTkLabel(
-            card, text="Términos más frecuentes", font=FONT_H2, text_color=THEME["text_1"]
-        ).grid(row=0, column=0, sticky="w", padx=CARD_PADDING, pady=(CARD_PADDING, 8))
-
+        ctk.CTkLabel(card, text="Terminos mas frecuentes", font=FONT_H2, text_color=THEME["text_1"]).grid(
+            row=0, column=0, sticky="w", padx=CARD_PADDING, pady=(CARD_PADDING, 8)
+        )
         top = _top_terms(corpus, n=12)
         if not top:
-            ctk.CTkLabel(
-                card, text="Sin datos NLP disponibles.", font=FONT_META, text_color=THEME["text_2"]
-            ).grid(row=1, column=0, sticky="w", padx=CARD_PADDING, pady=(0, CARD_PADDING))
+            ctk.CTkLabel(card, text="Sin datos NLP disponibles.", font=FONT_META, text_color=THEME["text_2"]).grid(
+                row=1, column=0, sticky="w", padx=CARD_PADDING, pady=(0, CARD_PADDING)
+            )
             return card
 
         max_count = top[0][1] if top else 1
         for row, (term, count) in enumerate(top, start=1):
-            bar_pct = int((count / max_count) * 100)
             line = ctk.CTkFrame(card, fg_color=THEME["bg_base"], corner_radius=0)
             line.grid(row=row, column=0, sticky="ew", padx=CARD_PADDING, pady=2)
             line.grid_columnconfigure(1, weight=1)
-
-            ctk.CTkLabel(
-                line, text=term, font=FONT_BODY, text_color=THEME["text_1"], width=120, anchor="w"
-            ).grid(row=0, column=0)
-
+            ctk.CTkLabel(line, text=term, font=FONT_BODY, text_color=THEME["text_1"], width=120, anchor="w").grid(row=0, column=0)
             bar_frame = ctk.CTkFrame(line, fg_color=THEME["border"], corner_radius=3, height=10)
             bar_frame.grid(row=0, column=1, sticky="ew", padx=(8, 8))
             bar_frame.grid_propagate(False)
-            bar_fill = ctk.CTkFrame(
-                bar_frame,
-                fg_color=THEME["accent"],
-                corner_radius=3,
-                height=10,
+            ctk.CTkFrame(bar_frame, fg_color=THEME["accent"], corner_radius=3, height=10).place(
+                relx=0, rely=0, relwidth=count / max_count, relheight=1
             )
-            bar_fill.place(relx=0, rely=0, relwidth=bar_pct / 100, relheight=1)
-
-            ctk.CTkLabel(
-                line, text=str(count), font=FONT_META, text_color=THEME["text_2"], width=30
-            ).grid(row=0, column=2)
-
+            ctk.CTkLabel(line, text=str(count), font=FONT_META, text_color=THEME["text_2"], width=30).grid(row=0, column=2)
         return card
 
     def _build_pipeline_card(self, master, pipeline: dict) -> ctk.CTkFrame:
         card = self._card(master)
-        ctk.CTkLabel(
-            card, text="Estado del pipeline", font=FONT_H2, text_color=THEME["text_1"]
-        ).grid(row=0, column=0, sticky="w", padx=CARD_PADDING, pady=(CARD_PADDING, 8))
-
-        _steps_info = [
-            ("extraccion",           "Extracción de noticias"),
-            ("exportacion_cruda",    "Exportación cruda"),
-            ("nlp",                  "Procesamiento NLP"),
-            ("exportacion_procesada","Exportación NLP"),
+        ctk.CTkLabel(card, text="Estado del pipeline", font=FONT_H2, text_color=THEME["text_1"]).grid(
+            row=0, column=0, columnspan=2, sticky="w", padx=CARD_PADDING, pady=(CARD_PADDING, 8)
+        )
+        steps = [
+            ("extraccion", "Extraccion de noticias"),
+            ("nlp", "Procesamiento NLP"),
+            ("analisis", "Analisis automatico"),
+            ("busqueda", "Motor de busqueda"),
+            ("qa", "Q&A contextual"),
+            ("grafo", "Knowledge Graph"),
+            ("reportes", "Reportes finales"),
         ]
-        _icons = {"ok": ("✓", THEME["success"]), "warning": ("⚠", THEME["warning"]),
-                  "error": ("✗", THEME["error"])}
-
-        for row, (key, label) in enumerate(_steps_info, start=1):
-            estado = pipeline.get(key)
-            if estado:
-                icon, color = _icons.get(estado, ("?", THEME["text_2"]))
-            else:
-                icon, color = "○", THEME["text_2"]
-
-            ctk.CTkLabel(card, text=icon, font=FONT_BODY, text_color=color, width=22).grid(
+        icons = {
+            "completed": ("OK", THEME["success"]),
+            "ok": ("OK", THEME["success"]),
+            "partial": ("!", THEME["warning"]),
+            "warning": ("!", THEME["warning"]),
+            "error": ("X", THEME["error"]),
+            "pending": ("-", THEME["text_2"]),
+        }
+        for row, (key, label) in enumerate(steps, start=1):
+            icon, color = icons.get(pipeline.get(key, "pending"), ("-", THEME["text_2"]))
+            ctk.CTkLabel(card, text=icon, font=FONT_BODY, text_color=color, width=28).grid(
                 row=row, column=0, padx=(CARD_PADDING, 4), pady=3
             )
             ctk.CTkLabel(card, text=label, font=FONT_BODY, text_color=THEME["text_1"], anchor="w").grid(
                 row=row, column=1, sticky="w", padx=(0, CARD_PADDING), pady=3
             )
-
         card.grid_columnconfigure(1, weight=1)
         return card
 
     def _build_fuentes_card(self, master, noticias: list[dict]) -> ctk.CTkFrame:
         card = self._card(master)
-        ctk.CTkLabel(
-            card, text="Distribución por fuente", font=FONT_H2, text_color=THEME["text_1"]
-        ).grid(row=0, column=0, columnspan=99, sticky="w", padx=CARD_PADDING, pady=(CARD_PADDING, 8))
-
-        counter = Counter(n.get("fuente_nombre", "Demo local") for n in noticias)
-        total = len(noticias)
-
-        for col, (fuente, cnt) in enumerate(counter.most_common()):
-            pct_text = f"{cnt / total * 100:.0f}%" if total else "0%"
-            frame = ctk.CTkFrame(card, fg_color=THEME["bg_base"], corner_radius=CARD_RADIUS)
-            frame.grid(row=1, column=col, padx=(CARD_PADDING if col == 0 else 4, 4), pady=(0, CARD_PADDING))
-
-            ctk.CTkLabel(
-                frame, text=pct_text, font=("Segoe UI", 14, "bold"), text_color=THEME["accent"]
-            ).grid(row=0, column=0, padx=8, pady=(6, 0))
-            ctk.CTkLabel(
-                frame, text=f"{fuente} ({cnt})", font=FONT_META, text_color=THEME["text_2"]
-            ).grid(row=1, column=0, padx=8, pady=(0, 6))
-
+        ctk.CTkLabel(card, text="Distribucion por fuente", font=FONT_H2, text_color=THEME["text_1"]).grid(
+            row=0, column=0, columnspan=99, sticky="w", padx=CARD_PADDING, pady=(CARD_PADDING, 8)
+        )
+        self._build_distribution(card, Counter(n.get("fuente_nombre") or n.get("fuente") or "Demo local" for n in noticias), len(noticias))
         return card
 
     def _build_categorias_card(self, master, noticias: list[dict]) -> ctk.CTkFrame:
         card = self._card(master)
+        ctk.CTkLabel(card, text="Distribucion por categoria", font=FONT_H2, text_color=THEME["text_1"]).grid(
+            row=0, column=0, columnspan=99, sticky="w", padx=CARD_PADDING, pady=(CARD_PADDING, 8)
+        )
+        counter = Counter(
+            n.get("categoria_predicha") or n.get("categoria") or n.get("categoria_original") or "sin_categoria"
+            for n in noticias
+        )
+        self._build_distribution(card, counter, len(noticias))
+        return card
+
+    def _build_sentimientos_card(self, master, noticias: list[dict], analisis: dict) -> ctk.CTkFrame:
+        card = self._card(master)
+        card.grid_columnconfigure(1, weight=1)
+
         ctk.CTkLabel(
-            card, text="Distribución por categoría", font=FONT_H2, text_color=THEME["text_1"]
-        ).grid(row=0, column=0, columnspan=99, sticky="w", padx=CARD_PADDING, pady=(CARD_PADDING, 8))
+            card, text="Análisis de sentimiento", font=FONT_H2, text_color=THEME["text_1"]
+        ).grid(row=0, column=0, columnspan=2, sticky="w", padx=CARD_PADDING, pady=(CARD_PADDING, 8))
 
-        counter = Counter(n.get("categoria", "sin_categoria") for n in noticias)
-        total   = len(noticias)
+        dist = _sentimiento_distribucion(noticias, analisis)
+        dominante = analisis.get("sentimiento_dominante") or (
+            max(dist, key=dist.get) if dist else "neutral"
+        )
+        total = sum(dist.values())
 
-        for col, (cat, cnt) in enumerate(counter.most_common()):
-            pct_text = f"{cnt / total * 100:.0f}%" if total else "0%"
-            frame = ctk.CTkFrame(card, fg_color=THEME["bg_base"], corner_radius=CARD_RADIUS)
-            frame.grid(row=1, column=col, padx=(CARD_PADDING if col == 0 else 4, 4), pady=(0, CARD_PADDING))
+        _SENT_COLORS = {
+            "positivo": THEME["success"],
+            "negativo": THEME["error"],
+            "neutral":  THEME["text_2"],
+            "mixed":    THEME["warning"],
+        }
+        dom_color = _SENT_COLORS.get(dominante, THEME["accent"])
+
+        # Left: dominant sentiment badge
+        badge = ctk.CTkFrame(card, fg_color=THEME["bg_base"], corner_radius=CARD_RADIUS)
+        badge.grid(row=1, column=0, sticky="ns", padx=(CARD_PADDING, 8), pady=(0, CARD_PADDING))
+        ctk.CTkLabel(badge, text=dominante.upper(), font=FONT_STAT_LARGE, text_color=dom_color).grid(
+            row=0, column=0, padx=16, pady=(10, 2)
+        )
+        ctk.CTkLabel(badge, text="sentimiento dominante", font=FONT_META, text_color=THEME["text_2"]).grid(
+            row=1, column=0, padx=16, pady=(0, 10)
+        )
+
+        # Right: distribution bars
+        bars = ctk.CTkFrame(card, fg_color=THEME["bg_base"], corner_radius=CARD_RADIUS)
+        bars.grid(row=1, column=1, sticky="nsew", padx=(0, CARD_PADDING), pady=(0, CARD_PADDING))
+        bars.grid_columnconfigure(1, weight=1)
+
+        for row_idx, (etiqueta, count) in enumerate(
+            sorted(dist.items(), key=lambda x: -x[1])
+        ):
+            pct = count / total if total else 0
+            color = _SENT_COLORS.get(etiqueta, THEME["accent"])
 
             ctk.CTkLabel(
-                frame, text=pct_text, font=("Segoe UI", 14, "bold"), text_color=THEME["accent"]
-            ).grid(row=0, column=0, padx=8, pady=(6, 0))
+                bars, text=etiqueta, font=FONT_BODY, text_color=THEME["text_1"],
+                width=80, anchor="w",
+            ).grid(row=row_idx, column=0, padx=(CARD_PADDING, 6), pady=4, sticky="w")
+
+            bar_track = ctk.CTkFrame(bars, fg_color=THEME["border"], corner_radius=4, height=14)
+            bar_track.grid(row=row_idx, column=1, sticky="ew", padx=(0, 8), pady=4)
+            bar_track.grid_propagate(False)
+            ctk.CTkFrame(bar_track, fg_color=color, corner_radius=4, height=14).place(
+                relx=0, rely=0, relwidth=pct, relheight=1
+            )
+
             ctk.CTkLabel(
-                frame, text=f"{cat} ({cnt})", font=FONT_META, text_color=THEME["text_2"]
-            ).grid(row=1, column=0, padx=8, pady=(0, 6))
+                bars, text=f"{count} ({pct:.0%})", font=FONT_META, text_color=THEME["text_2"],
+                width=72, anchor="e",
+            ).grid(row=row_idx, column=2, padx=(0, CARD_PADDING), pady=4)
 
         return card
 
+    def _build_distribution(self, card, counter: Counter, total: int) -> None:
+        for col, (label, count) in enumerate(counter.most_common()):
+            pct_text = f"{count / total * 100:.0f}%" if total else "0%"
+            frame = ctk.CTkFrame(card, fg_color=THEME["bg_base"], corner_radius=CARD_RADIUS)
+            frame.grid(row=1, column=col, padx=(CARD_PADDING if col == 0 else 4, 4), pady=(0, CARD_PADDING))
+            ctk.CTkLabel(frame, text=pct_text, font=FONT_STAT, text_color=THEME["accent"]).grid(row=0, column=0, padx=8, pady=(6, 0))
+            ctk.CTkLabel(frame, text=f"{label} ({count})", font=FONT_META, text_color=THEME["text_2"]).grid(row=1, column=0, padx=8, pady=(0, 6))
 
-# ── helpers ──────────────────────────────────────────────────────────────────
 
 def _top_terms(corpus: list[dict], n: int = 12) -> list[tuple[str, int]]:
     counter: Counter[str] = Counter()
@@ -241,7 +252,35 @@ def _top_terms(corpus: list[dict], n: int = 12) -> list[tuple[str, int]]:
     return counter.most_common(n)
 
 
+def _sentimiento_promedio(noticias: list[dict]) -> float | None:
+    scores: list[float] = []
+    for noticia in noticias:
+        sentimiento = noticia.get("sentimiento")
+        if not isinstance(sentimiento, dict):
+            continue
+        valor = sentimiento.get("compound", sentimiento.get("score"))
+        try:
+            scores.append(float(valor))
+        except (TypeError, ValueError):
+            continue
+    return sum(scores) / len(scores) if scores else None
+
+
 def _fmt_float(value) -> str:
     if isinstance(value, (int, float)):
-        return f"{value:.1f}"
-    return "—"
+        return f"{value:.2f}"
+    return "-"
+
+
+def _sentimiento_distribucion(noticias: list[dict], analisis: dict) -> dict[str, int]:
+    """Returns sentiment counter dict, preferring pre-computed analisis data."""
+    precomputed = analisis.get("sentimientos")
+    if isinstance(precomputed, dict) and precomputed:
+        return {k: int(v) for k, v in precomputed.items()}
+    counter: Counter[str] = Counter()
+    for n in noticias:
+        sent = n.get("sentimiento")
+        if isinstance(sent, dict):
+            etiqueta = sent.get("etiqueta", "neutral")
+            counter[etiqueta] += 1
+    return dict(counter) if counter else {"neutral": len(noticias)}

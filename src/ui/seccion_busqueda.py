@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tkinter import messagebox
+
 import customtkinter as ctk
 
 from src.ui_theme import CARD_PADDING, CARD_RADIUS, FONT_BODY, FONT_H1, FONT_H2, FONT_META, THEME
@@ -13,6 +15,7 @@ class SeccionBusquedaQA(ctk.CTkFrame):
         self.root_app = root_app
         self.query_var = ctk.StringVar()
         self.question_var = ctk.StringVar()
+        self.modelo_var = ctk.StringVar(value="Natural")
         self._build()
 
     def _build(self) -> None:
@@ -26,10 +29,12 @@ class SeccionBusquedaQA(ctk.CTkFrame):
 
         left = self._card(self)
         left.grid(row=0, column=0, sticky="nsew", padx=(18, 8), pady=12)
-        left.grid_rowconfigure(3, weight=1)
+        left.grid_rowconfigure(4, weight=1)
         right = self._card(self)
         right.grid(row=0, column=1, sticky="nsew", padx=(8, 18), pady=12)
         right.grid_rowconfigure(3, weight=1)
+        bottom = self._card(self)
+        bottom.grid(row=1, column=0, columnspan=2, sticky="ew", padx=18, pady=(0, 12))
 
         ctk.CTkLabel(left, text="Smart Search", font=FONT_H2, text_color=THEME["text_1"]).grid(
             row=0, column=0, sticky="w", padx=CARD_PADDING, pady=(CARD_PADDING, 8)
@@ -38,11 +43,20 @@ class SeccionBusquedaQA(ctk.CTkFrame):
                      fg_color=THEME["bg_input"], border_color=THEME["border"], text_color=THEME["text_1"]).grid(
             row=1, column=0, sticky="ew", padx=CARD_PADDING, pady=(0, 8)
         )
+        ctk.CTkOptionMenu(
+            left,
+            variable=self.modelo_var,
+            values=["Natural", "Vectorial", "Booleano"],
+            fg_color=THEME["bg_input"],
+            button_color=THEME["border"],
+            button_hover_color=THEME["accent"],
+            text_color=THEME["text_1"],
+        ).grid(row=2, column=0, sticky="ew", padx=CARD_PADDING, pady=(0, 8))
         ctk.CTkButton(left, text="Search", command=self._buscar, fg_color=THEME["accent"]).grid(
-            row=2, column=0, sticky="ew", padx=CARD_PADDING, pady=(0, 8)
+            row=3, column=0, sticky="ew", padx=CARD_PADDING, pady=(0, 8)
         )
         self.search_box = ctk.CTkTextbox(left, fg_color=THEME["bg_input"], text_color=THEME["text_1"], font=FONT_BODY)
-        self.search_box.grid(row=3, column=0, sticky="nsew", padx=CARD_PADDING, pady=(0, CARD_PADDING))
+        self.search_box.grid(row=4, column=0, sticky="nsew", padx=CARD_PADDING, pady=(0, CARD_PADDING))
 
         ctk.CTkLabel(right, text="Q&A", font=FONT_H2, text_color=THEME["text_1"]).grid(
             row=0, column=0, sticky="w", padx=CARD_PADDING, pady=(CARD_PADDING, 8)
@@ -56,6 +70,7 @@ class SeccionBusquedaQA(ctk.CTkFrame):
         )
         self.qa_box = ctk.CTkTextbox(right, fg_color=THEME["bg_input"], text_color=THEME["text_1"], font=FONT_BODY)
         self.qa_box.grid(row=3, column=0, sticky="nsew", padx=CARD_PADDING, pady=(0, CARD_PADDING))
+        self._build_alerts_card(bottom)
         self._render_history()
 
     def _card(self, master) -> ctk.CTkFrame:
@@ -72,7 +87,8 @@ class SeccionBusquedaQA(ctk.CTkFrame):
 
     def _buscar(self) -> None:
         service = getattr(self.root_app, "simanw_service", None)
-        resultados = service.buscar(self.query_var.get()) if service else []
+        modelo = self.modelo_var.get().lower()
+        resultados = service.buscar(self.query_var.get(), modelo=modelo) if service else []
         texto = []
         for idx, item in enumerate(resultados, start=1):
             texto.append(
@@ -86,6 +102,87 @@ class SeccionBusquedaQA(ctk.CTkFrame):
         service = getattr(self.root_app, "simanw_service", None)
         respuesta = service.preguntar(self.question_var.get()) if service else "No service available."
         self._render_history(extra=respuesta)
+
+    def _build_alerts_card(self, card) -> None:
+        card.grid_columnconfigure(0, weight=1)
+        card.grid_columnconfigure(1, weight=0)
+        ctk.CTkLabel(card, text="Saved query alerts (AC-10)", font=FONT_H2, text_color=THEME["text_1"]).grid(
+            row=0, column=0, sticky="w", padx=CARD_PADDING, pady=(CARD_PADDING, 4)
+        )
+        self.alerts_label = ctk.CTkLabel(
+            card,
+            text=self._alerts_text(),
+            font=FONT_BODY,
+            text_color=THEME["text_1"],
+            justify="left",
+            anchor="w",
+        )
+        self.alerts_label.grid(row=1, column=0, sticky="w", padx=CARD_PADDING, pady=(0, CARD_PADDING))
+        ctk.CTkButton(
+            card,
+            text="Run alerts on loaded news",
+            command=self._ejecutar_alertas,
+            fg_color=THEME["bg_input"],
+            hover_color=THEME["border"],
+            border_width=1,
+            border_color=THEME["border"],
+            text_color=THEME["text_1"],
+        ).grid(row=0, column=1, rowspan=2, sticky="e", padx=CARD_PADDING, pady=CARD_PADDING)
+
+    def _alerts_text(self, evidencia: dict | None = None) -> str:
+        if evidencia is None:
+            result = getattr(self.root_app, "resultado_actual", None)
+            evidencia = result.evidencias_ac.get("AC-10", {}) if result else {}
+        consultas = evidencia.get("consultas_guardadas", [])
+        return (
+            f"Estado: {evidencia.get('estado', 'pendiente')} | "
+            f"Consultas: {evidencia.get('numero_consultas', len(consultas))} | "
+            f"Alertas: {evidencia.get('alertas_generadas', 0)} | "
+            f"Duplicados evitados: {evidencia.get('alertas_duplicadas_evitadas', 0)}\n"
+            f"{', '.join(consultas[:5]) or 'Sin consultas registradas'}"
+        )
+
+    def _ejecutar_alertas(self) -> None:
+        service = getattr(self.root_app, "simanw_service", None)
+        if service is None:
+            mensaje = "No hay servicio activo. Carga y analiza noticias primero."
+            self.alerts_label.configure(text=mensaje)
+            self.root_app.set_estado(mensaje, "warning")
+            messagebox.showwarning("Alertas AC-10", mensaje)
+            return
+
+        if not getattr(self.root_app, "corpus_procesado", []):
+            mensaje = "No hay noticias cargadas para evaluar alertas."
+            self.alerts_label.configure(text=mensaje)
+            self.root_app.set_estado(mensaje, "warning")
+            messagebox.showwarning("Alertas AC-10", mensaje)
+            return
+
+        try:
+            evidencia = service.ejecutar_alertas_guardadas()
+        except Exception as exc:
+            mensaje = f"No se pudieron ejecutar las alertas: {exc}"
+            self.alerts_label.configure(text=mensaje)
+            self.root_app.set_estado(mensaje, "error")
+            messagebox.showerror("Alertas AC-10", mensaje)
+            return
+
+        if not evidencia:
+            mensaje = "No se genero evidencia de alertas. Revisa que el pipeline haya terminado."
+            self.alerts_label.configure(text=mensaje)
+            self.root_app.set_estado(mensaje, "warning")
+            return
+
+        if getattr(service, "estado_actual", None) is not None:
+            self.root_app.resultado_actual = service.estado_actual
+
+        self.alerts_label.configure(text=self._alerts_text(evidencia))
+        generadas = evidencia.get("alertas_generadas", 0)
+        duplicadas = evidencia.get("alertas_duplicadas_evitadas", 0)
+        self.root_app.set_estado(
+            f"AC-10: {generadas} alertas generadas, {duplicadas} duplicados evitados",
+            "ok" if generadas else "warning",
+        )
 
     def _render_history(self, extra: str | None = None) -> None:
         service = getattr(self.root_app, "simanw_service", None)

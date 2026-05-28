@@ -7,7 +7,7 @@ import customtkinter as ctk
 
 from src.fase1_service import Fase1Service, ResultadoFase1
 from src.fuentes_service import FuentesService
-from src.ui_theme import CARD_PADDING, CARD_RADIUS, FONT_BODY, FONT_H2, FONT_META, THEME
+from src.ui_theme import CARD_PADDING, CARD_RADIUS, FONT_BODY, FONT_H2, FONT_META, THEME, TREEVIEW_ROW_HEIGHT
 
 
 class Fase1Frame(ctk.CTkFrame):
@@ -435,7 +435,7 @@ class Fase1Frame(ctk.CTkFrame):
             background=THEME["bg_input"],
             fieldbackground=THEME["bg_input"],
             foreground=THEME["text_1"],
-            rowheight=30,
+            rowheight=TREEVIEW_ROW_HEIGHT,
             bordercolor=THEME["border"],
             lightcolor=THEME["border"],
             darkcolor=THEME["border"],

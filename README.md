@@ -120,6 +120,40 @@ Al finalizar esta fase, el sistema cuenta con una base funcional para extraer no
 
 ---
 
+## Aplicacion de escritorio
+
+SIMANW incluye una interfaz de escritorio construida con `customtkinter`.
+
+### Ejecutar la app de escritorio
+
+Desde PowerShell, en la raiz del proyecto:
+
+```powershell
+cd "C:\Users\Oscar Zamudio\Documents\SIMANW"
+.\.venv\Scripts\Activate.ps1
+python -m src.nltk_setup
+python app_desktop.py
+```
+
+Si aun no existe el entorno virtual o faltan dependencias:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python -m src.nltk_setup
+python app_desktop.py
+```
+
+### Flujo basico
+
+1. Abrir `Load / Analyze News`.
+2. Seleccionar `Demo local` para una ejecucion reproducible sin internet.
+3. Presionar `Analyze News`.
+4. Revisar `Dashboard`, `Smart Results`, `News Explorer`, `Search & Q&A`, `Knowledge Graph`, `Reports & Exports` y `Academic Evidence`.
+
+---
+
 ## Interfaz visual con Streamlit
 
 SIMANW incluye un dashboard interactivo construido con Streamlit que expone todas las capacidades del sistema en un entorno visual moderno.

@@ -15,7 +15,7 @@ from tkinter import messagebox, ttk
 import customtkinter as ctk
 
 from src.fase2_service import Fase2Service, ResultadoFase2
-from src.ui_theme import CARD_PADDING, CARD_RADIUS, FONT_BODY, FONT_H2, FONT_META, THEME
+from src.ui_theme import CARD_PADDING, CARD_RADIUS, FONT_BODY, FONT_H2, FONT_META, THEME, TREEVIEW_ROW_HEIGHT
 
 
 class Fase2Frame(ctk.CTkFrame):
@@ -459,7 +459,7 @@ class Fase2Frame(ctk.CTkFrame):
             background=THEME["bg_input"],
             fieldbackground=THEME["bg_input"],
             foreground=THEME["text_1"],
-            rowheight=30,
+            rowheight=TREEVIEW_ROW_HEIGHT,
             bordercolor=THEME["border"],
             lightcolor=THEME["border"],
             darkcolor=THEME["border"],

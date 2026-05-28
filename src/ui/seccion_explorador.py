@@ -6,7 +6,7 @@ from tkinter import messagebox, ttk
 import customtkinter as ctk
 
 from src.fase1_service import Fase1Service
-from src.ui_theme import CARD_PADDING, CARD_RADIUS, FONT_BODY, FONT_H1, FONT_H2, FONT_META, THEME
+from src.ui_theme import CARD_PADDING, CARD_RADIUS, FONT_BODY, FONT_H1, FONT_H2, FONT_META, THEME, TREEVIEW_ROW_HEIGHT
 
 
 class SeccionExplorador(ctk.CTkFrame):
@@ -231,7 +231,7 @@ class SeccionExplorador(ctk.CTkFrame):
         style.configure(
             "Treeview",
             background=THEME["bg_input"], fieldbackground=THEME["bg_input"],
-            foreground=THEME["text_1"], rowheight=30,
+            foreground=THEME["text_1"], rowheight=TREEVIEW_ROW_HEIGHT,
             bordercolor=THEME["border"], lightcolor=THEME["border"],
             darkcolor=THEME["border"], font=FONT_BODY,
         )

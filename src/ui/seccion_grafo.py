@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import customtkinter as ctk
 
+from src.fase6_service import QUERY_ENLACES_WIKIDATA
 from src.knowledge_graph import QUERY_CONTEO_CATEGORIA, QUERY_NOTICIAS_METADATA
 from src.ui_theme import CARD_PADDING, CARD_RADIUS, FONT_BODY, FONT_H1, FONT_H2, FONT_META, THEME
 
@@ -16,6 +17,7 @@ class SeccionGrafo(ctk.CTkFrame):
         self.queries = {
             "Conteo por categoria": QUERY_CONTEO_CATEGORIA,
             "Noticias con metadata": QUERY_NOTICIAS_METADATA,
+            "Enlaces Wikidata": QUERY_ENLACES_WIKIDATA,
         }
         self._build()
 
@@ -36,6 +38,7 @@ class SeccionGrafo(ctk.CTkFrame):
         info = self.root_app.grafo_info
         items = [
             ("Triples RDF", str(info.get("total_triples", 0))),
+            ("Wikidata links", str(info.get("entidades", {}).get("enlaces_wikidata", 0))),
             ("Formatos", ", ".join(info.get("formatos_exportados", [])) or "N/D"),
             ("Errores", str(len(info.get("errores", [])))),
         ]

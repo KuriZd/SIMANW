@@ -227,8 +227,41 @@ def inject_sidebar_styles() -> None:
 # Estilos principales (contenido + sidebar)
 # ---------------------------------------------------------------------------
 
+_NAV_PAGES: list[tuple[str, str, str]] = [
+    ("📊", "Dashboard",                    "app.py"),
+    ("F1", "Rastreo Web",                  "pages/AC01_Rastreo_Paginado.py"),
+    ("F2", "Análisis de Discurso",         "pages/AC02_Analisis_Discurso.py"),
+    ("F3", "Selección de Modelo",          "pages/AC03_Seleccion_Modelo.py"),
+    ("F4", "Hilo de Discusión",            "pages/AC04_Hilo_Discusion.py"),
+    ("F5", "Comparador de Búsqueda",       "pages/AC05_Comparador_Busqueda.py"),
+    ("F6", "Chatbot Contextual",           "pages/AC06_Chatbot_Contextual.py"),
+    ("F7", "Enriquecimiento KG",           "pages/AC07_Enriquecimiento_KG.py"),
+    ("08", "Control de Calidad",           "pages/AC08_Control_Calidad.py"),
+    ("09", "Tendencias Temporales",        "pages/AC09_Tendencias_Temporales.py"),
+    ("10", "Alertas de Consulta",          "pages/AC10_Alertas_Consulta.py"),
+    ("11", "Usabilidad",                   "pages/AC11_Usabilidad.py"),
+    ("12", "Trazabilidad",                 "pages/AC12_Trazabilidad.py"),
+    ("13", "Publicación Semántica",        "pages/AC13_Publicacion_Semantica.py"),
+]
+
+
+def _render_sidebar_nav() -> None:
+    with st.sidebar:
+        st.markdown(
+            "<div style='padding:0.6rem 0 0.25rem;font-size:1.1rem;font-weight:700;"
+            "color:#93C5FD;letter-spacing:0.04em'>SIMANW</div>",
+            unsafe_allow_html=True,
+        )
+        st.divider()
+        for icon, label, path in _NAV_PAGES:
+            st.page_link(path, label=f"{icon} · {label}")
+        st.divider()
+        st.caption("Sistema Inteligente de Monitoreo\ny Análisis de Noticias Web")
+
+
 def aplicar_estilo_global() -> None:
     """Aplica la capa visual al dashboard completo e inyecta los estilos de sidebar."""
+    _render_sidebar_nav()
     st.markdown(
         """
 <style>

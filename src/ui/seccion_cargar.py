@@ -35,6 +35,14 @@ class SeccionCargar(ctk.CTkFrame):
         self.fuente_predef_var = ctk.StringVar()
         self.tipo_custom_var = ctk.StringVar(value="RSS")
         self.url_var         = ctk.StringVar()
+        self.selector_articulos_var = ctk.StringVar(value="article")
+        self.selector_siguiente_var = ctk.StringVar(value="a[rel='next'], a.next-page, .next a")
+        self.selector_titulo_var = ctk.StringVar()
+        self.selector_resumen_var = ctk.StringVar()
+        self.selector_url_var = ctk.StringVar()
+        self.max_paginas_var = ctk.StringVar(value="5")
+        self.delay_var = ctk.StringVar(value="3")
+        self.min_noticias_var = ctk.StringVar(value="20")
 
         self._step_icon_labels: list[ctk.CTkLabel] = []
         self._step_text_labels: list[ctk.CTkLabel] = []
@@ -51,7 +59,7 @@ class SeccionCargar(ctk.CTkFrame):
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        left = ctk.CTkFrame(self, fg_color=THEME["bg_base"], corner_radius=0)
+        left = ctk.CTkScrollableFrame(self, fg_color=THEME["bg_base"], corner_radius=0)
         left.grid(row=0, column=0, sticky="nsew", padx=(18, 8), pady=12)
         left.grid_columnconfigure(0, weight=1)
 
@@ -113,6 +121,7 @@ class SeccionCargar(ctk.CTkFrame):
             card,
             values=["RSS", "Paginado"],
             variable=self.tipo_custom_var,
+            command=lambda _: self._actualizar_modo_entrada(),
             fg_color=THEME["bg_input"],
             button_color=THEME["accent"],
             button_hover_color=THEME["accent"],
@@ -123,6 +132,15 @@ class SeccionCargar(ctk.CTkFrame):
         )
         self.selector_tipo_custom.grid(row=3, column=0, sticky="ew", padx=CARD_PADDING, pady=(0, 8))
 
+        self.url_label = ctk.CTkLabel(
+            card,
+            text="URL",
+            font=FONT_META,
+            text_color=THEME["text_1"],
+            anchor="w",
+        )
+        self.url_label.grid(row=4, column=0, sticky="w", padx=CARD_PADDING, pady=(2, 2))
+
         self.url_entry = ctk.CTkEntry(
             card,
             textvariable=self.url_var,
@@ -132,7 +150,39 @@ class SeccionCargar(ctk.CTkFrame):
             text_color=THEME["text_1"],
             placeholder_text_color=THEME["text_2"],
         )
-        self.url_entry.grid(row=4, column=0, sticky="ew", padx=CARD_PADDING, pady=(0, 10))
+        self.url_entry.grid(row=5, column=0, sticky="ew", padx=CARD_PADDING, pady=(0, 8))
+
+        self.paginado_fields: list[ctk.CTkEntry] = []
+        self.paginado_labels: list[ctk.CTkLabel] = []
+        self.paginado_widgets: list[ctk.CTkBaseClass] = []
+        for row, (label, var, placeholder) in enumerate(
+            [
+                ("Article selector", self.selector_articulos_var, "article"),
+                ("Next page selector", self.selector_siguiente_var, "a[rel='next'], a.next-page"),
+                ("Title selector", self.selector_titulo_var, "h2 a, h3 a"),
+                ("Summary selector", self.selector_resumen_var, ".summary, p"),
+                ("URL selector", self.selector_url_var, "h2 a, h3 a"),
+                ("Max pages", self.max_paginas_var, "5"),
+                ("Delay seconds", self.delay_var, "3"),
+                ("Minimum news", self.min_noticias_var, "20"),
+            ],
+            start=6,
+        ):
+            lbl = ctk.CTkLabel(card, text=label, font=FONT_META, text_color=THEME["text_1"], anchor="w")
+            lbl.grid(row=row * 2, column=0, sticky="w", padx=CARD_PADDING, pady=(0, 2))
+            entry = ctk.CTkEntry(
+                card,
+                textvariable=var,
+                placeholder_text=placeholder,
+                fg_color=THEME["bg_input"],
+                border_color=THEME["border"],
+                text_color=THEME["text_1"],
+                placeholder_text_color=THEME["text_2"],
+            )
+            entry.grid(row=row * 2 + 1, column=0, sticky="ew", padx=CARD_PADDING, pady=(0, 6))
+            self.paginado_labels.append(lbl)
+            self.paginado_fields.append(entry)
+            self.paginado_widgets.extend([lbl, entry])
 
         self.btn_analizar = ctk.CTkButton(
             card,
@@ -143,7 +193,7 @@ class SeccionCargar(ctk.CTkFrame):
             text_color=THEME["text_1"],
             height=36,
         )
-        self.btn_analizar.grid(row=5, column=0, sticky="ew", padx=CARD_PADDING, pady=(0, CARD_PADDING))
+        self.btn_analizar.grid(row=28, column=0, sticky="ew", padx=CARD_PADDING, pady=(8, CARD_PADDING))
 
         self._actualizar_modo_entrada()
         return card
@@ -191,17 +241,23 @@ class SeccionCargar(ctk.CTkFrame):
 
     def _analizar(self) -> None:
         source, url = self._resolver_fuente()
+        try:
+            paginado_config = self._paginado_config() if source == "paginado" else None
+        except ValueError as exc:
+            messagebox.showerror("Configuracion de rastreo", str(exc))
+            return
         self._set_running(True)
         self._reset_pipeline()
         self.root_app.set_estado("Analizando noticias…", "loading")
         self.root_app.show_progress()
-        threading.Thread(target=self._analizar_bg, args=(source, url), daemon=True).start()
+        threading.Thread(target=self._analizar_bg, args=(source, url, paginado_config), daemon=True).start()
 
-    def _analizar_bg(self, source: str, url: str) -> None:
+    def _analizar_bg(self, source: str, url: str, paginado_config: dict | None) -> None:
         try:
             resultado = self.service.analizar_noticias(
                 source,
                 url,
+                paginado_config=paginado_config,
                 on_progreso=lambda msg: self.after(0, lambda m=msg: self._on_progreso(m)),
             )
             self.after(0, lambda r=resultado: self._on_resultado(r))
@@ -274,15 +330,65 @@ class SeccionCargar(ctk.CTkFrame):
         source = "rss" if tipo == "RSS" else "paginado"
         return source, url
 
+    def _paginado_config(self) -> dict:
+        url = self.url_var.get().strip()
+        if not url:
+            raise ValueError("Ingresa la URL inicial para rastreo web paginado.")
+        try:
+            delay = max(float(self.delay_var.get().strip() or "3"), 3.0)
+            max_paginas = max(int(self.max_paginas_var.get().strip() or "5"), 1)
+            min_noticias = max(int(self.min_noticias_var.get().strip() or "20"), 1)
+        except ValueError as exc:
+            raise ValueError("Max pages, delay seconds y minimum news deben ser numericos.") from exc
+
+        return {
+            "url_base": url,
+            "selector_articulos": self.selector_articulos_var.get().strip() or "article",
+            "selector_siguiente": self.selector_siguiente_var.get().strip() or "a[rel='next'], a.next-page, .next a",
+            "selector_titulo": self.selector_titulo_var.get().strip(),
+            "selector_resumen": self.selector_resumen_var.get().strip(),
+            "selector_url": self.selector_url_var.get().strip(),
+            "max_paginas": max_paginas,
+            "delay": delay,
+            "minimo_noticias": min_noticias,
+            "respetar_robots": True,
+        }
+
     def _actualizar_modo_entrada(self) -> None:
         modo = self.modo_var.get()
         predef_state  = "normal" if modo == _MODO_PREDEF  else "disabled"
         custom_state  = "normal" if modo == _MODO_CUSTOM  else "disabled"
         url_state     = "normal" if modo == _MODO_CUSTOM  else "disabled"
+        paginado_state = "normal" if modo == _MODO_CUSTOM and self.tipo_custom_var.get() == "Paginado" else "disabled"
 
         self.selector_predef.configure(state=predef_state)
         self.selector_tipo_custom.configure(state=custom_state)
+        self.url_label.configure(text_color=THEME["text_1"] if modo == _MODO_CUSTOM else THEME["text_2"])
         self.url_entry.configure(state=url_state)
+
+        if modo == _MODO_PREDEF:
+            self.selector_predef.grid()
+        else:
+            self.selector_predef.grid_remove()
+
+        if modo == _MODO_CUSTOM:
+            self.selector_tipo_custom.grid()
+            self.url_label.grid()
+            self.url_entry.grid()
+        else:
+            self.selector_tipo_custom.grid_remove()
+            self.url_label.grid_remove()
+            self.url_entry.grid_remove()
+
+        for lbl in getattr(self, "paginado_labels", []):
+            lbl.configure(text_color=THEME["text_1"] if paginado_state == "normal" else THEME["text_2"])
+        for entry in getattr(self, "paginado_fields", []):
+            entry.configure(state=paginado_state)
+        for widget in getattr(self, "paginado_widgets", []):
+            if paginado_state == "normal":
+                widget.grid()
+            else:
+                widget.grid_remove()
 
     def _reset_pipeline(self) -> None:
         self._step_index = 0

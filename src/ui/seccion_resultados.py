@@ -5,8 +5,9 @@ from tkinter import messagebox, ttk
 
 import customtkinter as ctk
 
+from src.analisis_discurso import AnalisisDiscurso
 from src.fase2_service import Fase2Service
-from src.ui_theme import CARD_PADDING, CARD_RADIUS, FONT_BODY, FONT_H1, FONT_H2, FONT_META, THEME
+from src.ui_theme import CARD_PADDING, CARD_RADIUS, FONT_BODY, FONT_H1, FONT_H2, FONT_META, THEME, TREEVIEW_ROW_HEIGHT
 
 
 class SeccionResultados(ctk.CTkFrame):
@@ -17,6 +18,7 @@ class SeccionResultados(ctk.CTkFrame):
         self.root_app = root_app
         self.corpus: list[dict] = list(root_app.corpus_procesado)
         self._service = Fase2Service()
+        self._analisis_discurso = self._cargar_analisis_discurso()
         self._config_treeview_style()
         self._build()
 
@@ -77,7 +79,11 @@ class SeccionResultados(ctk.CTkFrame):
         right.grid_rowconfigure(1, weight=2)
 
         self._build_stats_card(left, stats).grid(row=0, column=0, sticky="ew", pady=(0, 10))
-        self._build_export_card(left).grid(row=1, column=0, sticky="ew")
+        self._build_auto_analysis_card(left).grid(row=1, column=0, sticky="ew", pady=(0, 10))
+        self._build_trends_card(left).grid(row=2, column=0, sticky="ew", pady=(0, 10))
+        self._build_discourse_card(left).grid(row=3, column=0, sticky="ew", pady=(0, 10))
+        self._build_similarity_card(left).grid(row=4, column=0, sticky="ew", pady=(0, 10))
+        self._build_export_card(left).grid(row=5, column=0, sticky="ew")
 
         self._build_tabla_card(right).grid(row=0, column=0, sticky="nsew", pady=(0, 10))
         self._build_detalle_card(right).grid(row=1, column=0, sticky="nsew")
@@ -104,6 +110,113 @@ class SeccionResultados(ctk.CTkFrame):
             ctk.CTkLabel(card, text=val, font=FONT_BODY, text_color=THEME["text_1"]).grid(
                 row=row * 2, column=0, sticky="w", padx=CARD_PADDING, pady=(0, 6)
             )
+        return card
+
+    def _build_auto_analysis_card(self, master) -> ctk.CTkFrame:
+        card = self._card(master)
+        ctk.CTkLabel(
+            card, text="Automatic analysis", font=FONT_H2, text_color=THEME["text_1"]
+        ).grid(row=0, column=0, sticky="w", padx=CARD_PADDING, pady=(CARD_PADDING, 8))
+
+        analisis = getattr(self.root_app, "analisis", {}) or {}
+        clasificacion = analisis.get("clasificacion", {})
+        evaluacion = analisis.get("evaluacion_busqueda", {})
+        ac3 = clasificacion.get("ac3", {})
+        items = [
+            ("Categorias", _top_dict(analisis.get("categorias", {}))),
+            ("Sentimiento", _top_dict(analisis.get("sentimientos", {}))),
+            ("Modelo AC-3", ac3.get("mejor_modelo") or ac3.get("estado", "pendiente")),
+            ("Accuracy", _fmt_float(ac3.get("accuracy"))),
+            ("Search winner", evaluacion.get("ganador_f1") or "-"),
+            ("MAP vectorial", _fmt_float(evaluacion.get("map_vectorial"))),
+        ]
+        for row, (lbl, val) in enumerate(items, start=1):
+            ctk.CTkLabel(card, text=lbl, font=FONT_META, text_color=THEME["text_2"]).grid(
+                row=row * 2 - 1, column=0, sticky="w", padx=CARD_PADDING
+            )
+            ctk.CTkLabel(card, text=str(val or "-"), font=FONT_BODY, text_color=THEME["text_1"], wraplength=230).grid(
+                row=row * 2, column=0, sticky="w", padx=CARD_PADDING, pady=(0, 6)
+            )
+        return card
+
+    def _build_trends_card(self, master) -> ctk.CTkFrame:
+        card = self._card(master)
+        ctk.CTkLabel(
+            card, text="Timeline & trends (AC-9)", font=FONT_H2, text_color=THEME["text_1"]
+        ).grid(row=0, column=0, sticky="w", padx=CARD_PADDING, pady=(CARD_PADDING, 8))
+
+        analisis = getattr(self.root_app, "analisis", {}) or {}
+        tendencias = analisis.get("tendencias", {})
+        evidencia = {}
+        result = getattr(self.root_app, "resultado_actual", None)
+        if result:
+            evidencia = result.evidencias_ac.get("AC-9", {})
+        if not tendencias:
+            texto = "AC-9 pendiente: no hay fechas/categorias suficientes para tendencias."
+        else:
+            pico = tendencias.get("pico", {}) or {}
+            archivos = []
+            if evidencia.get("archivo_csv"):
+                archivos.append(evidencia["archivo_csv"])
+            if evidencia.get("archivo_png"):
+                archivos.append(evidencia["archivo_png"])
+            texto = (
+                f"Estado: {evidencia.get('estado', 'parcial')}\n"
+                f"Granularidad: {tendencias.get('granularidad', 'mes')}\n"
+                f"Temas: {', '.join(evidencia.get('temas_analizados', [])[:5]) or '-'}\n"
+                f"Pico: {pico.get('categoria', '-')} / {pico.get('periodo', '-')} ({pico.get('count', 0)} noticias)\n"
+                f"Archivos: {', '.join(archivos) or '-'}"
+            )
+        ctk.CTkLabel(card, text=texto, font=FONT_BODY, text_color=THEME["text_1"], justify="left", wraplength=230).grid(
+            row=1, column=0, sticky="w", padx=CARD_PADDING, pady=(0, CARD_PADDING)
+        )
+        return card
+
+    def _build_discourse_card(self, master) -> ctk.CTkFrame:
+        card = self._card(master)
+        ctk.CTkLabel(
+            card, text="Discourse statistics", font=FONT_H2, text_color=THEME["text_1"]
+        ).grid(row=0, column=0, sticky="w", padx=CARD_PADDING, pady=(CARD_PADDING, 8))
+
+        textos = self._analisis_discurso.get("textos_analizados", [])
+        if not textos:
+            ctk.CTkLabel(
+                card, text="No hay textos suficientes para AC-2.", font=FONT_META, text_color=THEME["text_2"]
+            ).grid(row=1, column=0, sticky="w", padx=CARD_PADDING, pady=(0, CARD_PADDING))
+            return card
+
+        primer = textos[0]
+        items = [
+            ("Textos analizados", str(len(textos))),
+            ("Riqueza promedio", _fmt_float(self._riqueza_promedio(textos))),
+            ("Top unigramas", _top_lista(primer.get("top_unigramas", []))),
+            ("Top bigramas", _top_ngramas(primer.get("top_bigramas", []))),
+            ("Top trigramas", _top_ngramas(primer.get("top_trigramas", []))),
+        ]
+        for row, (lbl, val) in enumerate(items, start=1):
+            ctk.CTkLabel(card, text=lbl, font=FONT_META, text_color=THEME["text_2"]).grid(
+                row=row * 2 - 1, column=0, sticky="w", padx=CARD_PADDING
+            )
+            ctk.CTkLabel(card, text=val or "-", font=FONT_BODY, text_color=THEME["text_1"], wraplength=230).grid(
+                row=row * 2, column=0, sticky="w", padx=CARD_PADDING, pady=(0, 6)
+            )
+        return card
+
+    def _build_similarity_card(self, master) -> ctk.CTkFrame:
+        card = self._card(master)
+        ctk.CTkLabel(
+            card, text="Similarity groups", font=FONT_H2, text_color=THEME["text_1"]
+        ).grid(row=0, column=0, sticky="w", padx=CARD_PADDING, pady=(CARD_PADDING, 8))
+        grupos = self.root_app.estadisticas_fase2.get("grupos_similares", [])
+        texto = "Sin grupos similares detectados."
+        if grupos:
+            texto = "\n".join(
+                f"Group {idx + 1}: " + ", ".join(f"N{i + 1}" for i in grupo)
+                for idx, grupo in enumerate(grupos[:5])
+            )
+        ctk.CTkLabel(card, text=texto, font=FONT_BODY, text_color=THEME["text_1"], justify="left").grid(
+            row=1, column=0, sticky="w", padx=CARD_PADDING, pady=(0, CARD_PADDING)
+        )
         return card
 
     def _build_export_card(self, master) -> ctk.CTkFrame:
@@ -212,8 +325,10 @@ class SeccionResultados(ctk.CTkFrame):
         item = self.corpus[int(sel[0])]
 
         self._det_titulo.configure(text=item["titulo"])
+        sentimiento = item.get("sentimiento", {}).get("etiqueta", "sin_sentimiento")
+        categoria_pred = item.get("categoria_predicha", item.get("categoria", "sin_categoria"))
         self._det_meta.configure(
-            text=f"{item['categoria']}  ·  {item['fecha']}  ·  {item['autor']}"
+            text=f"{item['categoria']} -> {categoria_pred}  |  {sentimiento}  |  {item['fecha']}  |  {item['autor']}"
         )
         relev_str = ", ".join(item.get("terminos_relevantes", [])) or "—"
         self._det_terminos.configure(text=f"TF-IDF: {relev_str}")
@@ -230,7 +345,8 @@ class SeccionResultados(ctk.CTkFrame):
             f"═══ STEMS ═══\n{stems_str}\n\n"
             f"Oraciones: {item['num_oraciones']}  ·  "
             f"Vocabulario único: {item['vocabulario_unico']}  ·  "
-            f"Riqueza léxica: {item['riqueza_lexica']:.4f}"
+            f"Riqueza léxica: {item['riqueza_lexica']:.4f}\n\n"
+            f"═══ NOTICIAS SIMILARES ═══\n{_similares_texto(item.get('recomendaciones') or item.get('noticias_similares', []))}"
         )
         self._det_cuerpo.configure(state="normal")
         self._det_cuerpo.delete("1.0", "end")
@@ -260,7 +376,7 @@ class SeccionResultados(ctk.CTkFrame):
         style.configure(
             "Treeview",
             background=THEME["bg_input"], fieldbackground=THEME["bg_input"],
-            foreground=THEME["text_1"], rowheight=30,
+            foreground=THEME["text_1"], rowheight=TREEVIEW_ROW_HEIGHT,
             bordercolor=THEME["border"], lightcolor=THEME["border"],
             darkcolor=THEME["border"], font=FONT_BODY,
         )
@@ -274,6 +390,64 @@ class SeccionResultados(ctk.CTkFrame):
                   foreground=[("selected", THEME["text_1"])])
         style.map("Treeview.Heading", background=[("active", THEME["border"])])
 
+    def _cargar_analisis_discurso(self) -> dict:
+        import json
+        from pathlib import Path
+        ruta = getattr(self.root_app, "rutas_exportacion", {}).get("analisis_ac2_json") or "data/analisis_ac2.json"
+        try:
+            path = Path(ruta)
+            if path.exists():
+                return json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+        return {}
+
+    @staticmethod
+    def _riqueza_promedio(textos: list[dict]) -> float:
+        if not textos:
+            return 0.0
+        return sum(float(t.get("riqueza_lexica_global", 0.0)) for t in textos) / len(textos)
+
 
 def _fmt_float(value) -> str:
-    return f"{value:.1f}" if isinstance(value, (int, float)) else "—"
+    return f"{value:.1f}" if isinstance(value, (int, float)) else "-"
+
+
+def _top_lista(items: list) -> str:
+    if not items:
+        return ""
+    return ", ".join(str(item[0]) for item in items[:5])
+
+
+def _top_dict(items: dict) -> str:
+    if not items:
+        return ""
+    ordenados = sorted(items.items(), key=lambda item: item[1], reverse=True)
+    return ", ".join(f"{clave}: {valor}" for clave, valor in ordenados[:4])
+
+
+def _top_ngramas(items: list) -> str:
+    valores = []
+    for item in items[:4]:
+        ngrama = item[0]
+        if isinstance(ngrama, (list, tuple)):
+            valores.append(" ".join(str(p) for p in ngrama))
+        else:
+            valores.append(str(ngrama))
+    return ", ".join(valores)
+
+
+def _similares_texto(similares: list[dict]) -> str:
+    if not similares:
+        return "Sin documentos similares con similitud positiva."
+    return "\n".join(
+        f"- [{float(item.get('similitud', 0.0)):.4f}] {item.get('titulo', '')}"
+        for item in similares[:5]
+    )
+
+
+def _serializar_basico(analisis: dict) -> dict:
+    resultado = {k: v for k, v in analisis.items() if not k.startswith("_")}
+    resultado["top_bigramas"] = [[list(b), c] for b, c in analisis.get("top_bigramas", [])]
+    resultado["top_trigramas"] = [[list(t), c] for t, c in analisis.get("top_trigramas", [])]
+    return resultado
