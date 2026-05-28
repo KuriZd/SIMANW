@@ -45,6 +45,7 @@ def test_metadata_fuente_preservada_en_noticias_normalizadas(rss_mock):
     assert n["fuente_nombre"] == "Aristegui Noticias"
     assert n["fuente_id"] == "aristegui_noticias"
     assert n["fuente_tipo"] == "rss"
+    assert n["categoria"] != "aristegui_noticias"
 
 
 def test_ejecutar_fuente_predefinida_id_invalido_lanza_key_error():
@@ -73,6 +74,14 @@ def test_ejecutar_fuente_predefinida_respeta_limite_noticias(rss_mock):
 
     fuente = service.fuentes_service.obtener_fuente("aristegui_noticias")
     assert len(noticias) <= fuente["limite_noticias"]
+
+
+def test_rss_predefinido_no_usa_id_de_fuente_como_categoria(rss_mock):
+    with patch("src.fase1_service.RastreadorRSS", return_value=rss_mock) as cls:
+        service = Fase1Service()
+        service.ejecutar_fuente_predefinida("la_jornada")
+
+    assert cls.call_args.kwargs["categoria_default"] == "sin_categoria"
 
 
 def test_normalizar_noticia_sin_fuente_no_incluye_metadata():

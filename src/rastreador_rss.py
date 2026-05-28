@@ -139,7 +139,37 @@ class RastreadorRSS:
             term = (tags[0].get("term", "") or "").lower().strip()
             if term:
                 return term
+        categoria_url = self._categoria_desde_url(getattr(entry, "link", "") or "")
+        if categoria_url:
+            return categoria_url
         return self.categoria_default
+
+    @staticmethod
+    def _categoria_desde_url(url: str) -> str:
+        """Infiere una categoria editorial basica desde segmentos comunes de URL."""
+        categorias_validas = {
+            "ciencia": "ciencia",
+            "ciencias": "ciencia",
+            "deportes": "deportes",
+            "economia": "economia",
+            "economía": "economia",
+            "estados": "estados",
+            "espectaculos": "espectaculos",
+            "espectáculos": "espectaculos",
+            "mundo": "mundo",
+            "opinion": "opinion",
+            "opinión": "opinion",
+            "politica": "politica",
+            "política": "politica",
+            "tecnologia": "tecnologia",
+            "tecnología": "tecnologia",
+        }
+        path = urlparse(url).path.lower()
+        for segmento in path.split("/"):
+            limpio = segmento.strip()
+            if limpio in categorias_validas:
+                return categorias_validas[limpio]
+        return ""
 
     @staticmethod
     def _limpiar_html(texto: str) -> str:

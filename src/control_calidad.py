@@ -177,6 +177,45 @@ class ControlCalidadCorpus:
             "utilizables en las fases siguientes del pipeline."
         )
 
+    def guardar_corpus_depurado(self, ruta: str | Path = "data/corpus_depurado_ac8.json") -> Path:
+        ruta = Path(ruta)
+        ruta.parent.mkdir(parents=True, exist_ok=True)
+        with ruta.open("w", encoding="utf-8") as f:
+            json.dump(self.corpus_depurado, f, ensure_ascii=False, indent=2)
+        return ruta
+
+    def guardar_rechazados(self, ruta: str | Path = "data/registros_rechazados_ac8.json") -> Path:
+        ruta = Path(ruta)
+        ruta.parent.mkdir(parents=True, exist_ok=True)
+        payload = [
+            {"titulo": r["registro"].get("titulo", ""), "url": r["registro"].get("url", ""), "motivos": r["motivos"]}
+            for r in self.registros_rechazados
+        ]
+        with ruta.open("w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+        return ruta
+
+    def guardar_resumen_markdown(self, ruta: str | Path = "reports/resumen_calidad_ac8.md") -> Path:
+        ruta = Path(ruta)
+        ruta.parent.mkdir(parents=True, exist_ok=True)
+        informe = self.generar_informe()
+        lineas = [
+            "# AC-8: Resumen de Control de Calidad del Corpus",
+            "",
+            f"**Total registros:** {informe['total_registros']}  ",
+            f"**Validos:** {informe['registros_validos']}  ",
+            f"**Rechazados:** {informe['registros_rechazados']}  ",
+            f"**Invalidos/incompletos:** {informe['invalidos_o_incompletos']}  ",
+            f"**Duplicados exactos (URL):** {informe['duplicados_exactos_url']}  ",
+            f"**Duplicados casi identicos (titulo):** {informe['duplicados_casi_identicos_titulo']}",
+            "",
+            "## Resumen",
+            "",
+            self.parrafo_resumen(),
+        ]
+        ruta.write_text("\n".join(lineas), encoding="utf-8")
+        return ruta
+
     # ------------------------------------------------------------------
     # Lógica de validación interna
     # ------------------------------------------------------------------

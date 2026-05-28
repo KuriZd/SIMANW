@@ -21,6 +21,7 @@ class ResultadoFase1:
     noticias: list[dict]
     fuente: FuenteFase1
     errores: list[str]
+    evidencia: dict | None = None
 
 
 class Fase1Service:
@@ -36,11 +37,13 @@ class Fase1Service:
         self.fuentes_service = FuentesService()
         self.noticias: list[dict] = []
         self.errores: list[str] = []
+        self.ultima_evidencia: dict | None = None
 
     def ejecutar(self, fuente: FuenteFase1, url: str = "") -> ResultadoFase1:
         """Ejecuta la fuente indicada y deja las noticias normalizadas en memoria."""
         fuente = self._normalizar_fuente(fuente)
         self.errores = []
+        self.ultima_evidencia = None
 
         if fuente == "demo":
             noticias = self._extraer_demo()
@@ -57,7 +60,12 @@ class Fase1Service:
             self.noticias = noticias
         else:
             self.noticias = [self._normalizar_noticia(noticia, idx) for idx, noticia in enumerate(noticias, start=1)]
-        return ResultadoFase1(noticias=self.noticias, fuente=fuente, errores=self.errores)
+        return ResultadoFase1(
+            noticias=self.noticias,
+            fuente=fuente,
+            errores=self.errores,
+            evidencia=self.ultima_evidencia,
+        )
 
     def ejecutar_demo(self) -> ResultadoFase1:
         return self.ejecutar("demo")
@@ -67,6 +75,18 @@ class Fase1Service:
 
     def ejecutar_paginado(self, url: str = "") -> ResultadoFase1:
         return self.ejecutar("paginado", url)
+
+    def ejecutar_paginado_configurado(self, config: dict) -> ResultadoFase1:
+        self.errores = []
+        self.ultima_evidencia = None
+        noticias = self._rastrear_paginado_config(config)
+        self.noticias = [self._normalizar_noticia(noticia, idx) for idx, noticia in enumerate(noticias, start=1)]
+        return ResultadoFase1(
+            noticias=self.noticias,
+            fuente="paginado",
+            errores=self.errores,
+            evidencia=self.ultima_evidencia,
+        )
 
     def ejecutar_fuente_predefinida(self, fuente_id: str) -> list[dict]:
         fuente = self.fuentes_service.obtener_fuente(fuente_id)
@@ -86,7 +106,7 @@ class Fase1Service:
                     break
                 rastreador = RastreadorRSS(
                     url,
-                    categoria_default=fuente["id"],
+                    categoria_default="sin_categoria",
                     max_noticias=max(limite_total - len(noticias_raw), 1),
                 )
                 noticias_url = rastreador.extraer()
@@ -142,14 +162,7 @@ class Fase1Service:
     def _rastrear_paginado(self, url: str) -> list[dict]:
         url = url.strip()
         if url:
-            rastreador = RastreadorPaginado(
-                url_base=url,
-                selector_articulos="article",
-                selector_siguiente="a.next-page",
-                delay=3,
-                max_paginas=5,
-                respetar_robots=True,
-            )
+            return self._rastrear_paginado_config({"url_base": url})
         else:
             rastreador = RastreadorPaginado(
                 url_base="https://ejemplo-noticias.com/noticias?page=1",
@@ -162,8 +175,54 @@ class Fase1Service:
             )
 
         noticias = rastreador.rastrear(minimo_noticias=20 if not url else None)
+        self.ultima_evidencia = rastreador.evidencia()
         if not noticias:
             self.errores.append("No se extrajeron noticias del rastreo paginado.")
+        self.errores.extend(rastreador.errores)
+        return noticias
+
+    def _rastrear_paginado_config(self, config: dict) -> list[dict]:
+        url = str(config.get("url_base") or config.get("url") or "").strip()
+        if not url:
+            raise ValueError("La fuente paginada requiere una URL inicial.")
+        delay = max(float(config.get("delay", 3) or 3), 3.0)
+        max_paginas = int(config.get("max_paginas", 5) or 5)
+        minimo_noticias = int(config.get("minimo_noticias", config.get("max_noticias", 20)) or 20)
+        rastreador = RastreadorPaginado(
+            url_base=url,
+            fuente=str(config.get("fuente") or dominio_desde_url(url)),
+            selector_articulos=str(config.get("selector_articulos") or "article"),
+            selector_siguiente=str(config.get("selector_siguiente") or "a[rel='next'], a.next-page, .next a"),
+            selector_titulo=config.get("selector_titulo") or None,
+            selector_resumen=config.get("selector_resumen") or None,
+            selector_url=config.get("selector_url") or None,
+            selector_fecha=config.get("selector_fecha") or None,
+            selector_autor=config.get("selector_autor") or None,
+            selector_categoria=config.get("selector_categoria") or None,
+            delay=delay,
+            max_paginas=max_paginas,
+            max_noticias=minimo_noticias,
+            user_agent=str(config.get("user_agent") or "SIMANWBot/1.0 (proyecto-academico)"),
+            respetar_robots=bool(config.get("respetar_robots", True)),
+        )
+        noticias = rastreador.rastrear(minimo_noticias=minimo_noticias)
+        self.ultima_evidencia = rastreador.evidencia()
+        if not noticias:
+            self.errores.append("No se extrajeron noticias del rastreo paginado.")
+            diagnostico = self.ultima_evidencia.get("diagnostico_paginas", []) if self.ultima_evidencia else []
+            if diagnostico:
+                primera = diagnostico[0]
+                self.errores.append(
+                    "Diagnostico paginado: "
+                    f"{primera.get('articulos_detectados', 0)} articulos detectados, "
+                    f"{primera.get('noticias_extraidas', 0)} noticias extraidas, "
+                    f"siguiente detectado: {primera.get('siguiente_detectado', False)}."
+                )
+        if len(noticias) < minimo_noticias:
+            self.errores.append(
+                f"Rastreo paginado incompleto: {len(noticias)} de {minimo_noticias} noticias requeridas."
+            )
+        self.errores.extend(rastreador.errores)
         return noticias
 
     @staticmethod
