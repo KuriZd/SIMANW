@@ -48,6 +48,8 @@ def test_comparador_evalua_ambos_modelos():
     assert resultado["consulta"] == "datos abiertos gobierno"
     assert resultado["booleano"]["recuperados"] == 1
     assert resultado["booleano"]["precision"] == 1.0
+    assert "precision_at_k" in resultado["booleano"]
+    assert "average_precision" in resultado["booleano"]
     assert resultado["vectorial"]["recuperados"] >= 1
     assert resultado["vectorial"]["recall"] == 1.0
 
@@ -60,8 +62,25 @@ def test_comparador_genera_reporte_y_promedios():
 
     assert len(evaluacion["resultados"]) == 4
     assert evaluacion["ganador_precision"] in {"booleano", "vectorial"}
+    assert evaluacion["ganador_map"] in {"booleano", "vectorial"}
+    assert 0 <= evaluacion["map_booleano"] <= 1
+    assert 0 <= evaluacion["map_vectorial"] <= 1
     assert "PROMEDIO" in reporte
     assert "Conclusion" in reporte
+
+
+def test_comparador_genera_consultas_desde_corpus_real():
+    from src.comparador_busqueda import generar_consultas_desde_corpus
+
+    docs = [
+        {**doc, "categoria_predicha": "tecnologia" if idx in {0, 3} else "general"}
+        for idx, doc in enumerate(documentos_demo())
+    ]
+
+    consultas = generar_consultas_desde_corpus(docs)
+
+    assert consultas
+    assert all("consulta" in item and "relevantes" in item for item in consultas)
 
 
 def test_comparador_requiere_documentos():

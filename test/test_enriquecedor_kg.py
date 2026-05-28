@@ -80,3 +80,44 @@ def test_enriquecedor_genera_queries_wikidata():
     assert "wdt:P366" in query_tecnologia
     assert "cambio climatico" in query_ciencia
     assert "No hay consulta" in query_desconocida
+
+
+def test_enriquecedor_automatico_valida_candidatos_wikidata():
+    kg = kg_demo()
+
+    def fake_client(_query):
+        return [
+            {
+                "item": "http://www.wikidata.org/entity/Q159810",
+                "itemLabel": "economia",
+                "description": "actividad economica",
+            }
+        ]
+
+    enriquecedor = EnriquecedorKG(kg, wikidata_client=fake_client)
+    evidencia = enriquecedor.enriquecer_desde_wikidata(limite_entidades=1)
+
+    assert evidencia["estado"] == "completo"
+    assert evidencia["total_enlaces_externos"] == 1
+    assert (kg.DATA["categoria_economia"], SKOS.exactMatch, enriquecedor.WD["Q159810"]) in kg.graph
+    assert evidencia["triples_despues"] > evidencia["triples_antes"]
+
+
+def test_enriquecedor_rechaza_candidato_ambiguo():
+    kg = kg_demo()
+
+    def fake_client(_query):
+        return [
+            {
+                "item": "http://www.wikidata.org/entity/Q999",
+                "itemLabel": "otra cosa",
+                "description": "no coincide",
+            }
+        ]
+
+    enriquecedor = EnriquecedorKG(kg, wikidata_client=fake_client)
+    evidencia = enriquecedor.enriquecer_desde_wikidata(limite_entidades=1)
+
+    assert evidencia["estado"] == "parcial"
+    assert evidencia["total_enlaces_externos"] == 0
+    assert evidencia["rechazadas"][0]["motivo"] == "sin_candidato_validado"

@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+
+from src.comparador_busqueda import ComparadorModelos, generar_consultas_desde_corpus
 from src.motor_busqueda import MotorBusqueda
 
 try:
@@ -33,8 +38,102 @@ class Fase4Service:
             resultados = self.motor.buscar_vectorial(consulta, top_k=top_k)
         return [self._enriquecer_resultado(resultado) for resultado in resultados]
 
+    def buscar_con_modelo(self, consulta: str, modelo: str = "natural", top_k: int = 10) -> list[dict]:
+        if not consulta.strip():
+            return []
+        modelo_norm = (modelo or "natural").strip().lower()
+        if modelo_norm == "booleano":
+            ids = self.motor.buscar_booleana(consulta, modo="AND")
+            return [
+                self._enriquecer_resultado({"doc_id": doc_id, "score": 1.0, "relevancia": 1.0})
+                for doc_id in ids[:top_k]
+            ]
+        if modelo_norm == "vectorial":
+            return [self._enriquecer_resultado(r) for r in self.motor.buscar_vectorial(consulta, top_k=top_k)]
+        return self.buscar(consulta, top_k=top_k)
+
+    def evaluar_modelos_busqueda(
+        self,
+        ruta: str | Path = "data/resultados_ac5.json",
+        ruta_consultas: str | Path = "config/consultas_ac5.json",
+    ) -> dict:
+        if not self.corpus:
+            return {
+                "estado": "pendiente",
+                "observacion": "No hay corpus indexado para evaluar AC-5.",
+                "ultima_ejecucion": datetime.now(timezone.utc).isoformat(),
+            }
+
+        consultas = self._cargar_consultas_relevancia(ruta_consultas)
+        origen_consultas = "config/consultas_ac5.json"
+        criterio_relevancia = "Juicios configurados por categoria en config/consultas_ac5.json."
+        if not consultas:
+            consultas = generar_consultas_desde_corpus(self.corpus)
+            origen_consultas = "generado_desde_corpus"
+            criterio_relevancia = "Documentos relevantes generados por categoria del corpus real."
+        if not consultas:
+            return {
+                "estado": "pendiente",
+                "observacion": "No se pudieron generar consultas con juicios de relevancia desde el corpus.",
+                "ultima_ejecucion": datetime.now(timezone.utc).isoformat(),
+                "total_documentos": len(self.corpus),
+            }
+
+        comparador = ComparadorModelos(self.corpus)
+        payload = comparador.guardar_json(ruta, consultas)
+        payload.update(
+            {
+                "estado": "completo",
+                "ultima_ejecucion": payload.get("fecha_generacion"),
+                "ejecutado_desde": "Search & Q&A",
+                "archivo_json": str(ruta),
+                "origen_consultas": origen_consultas,
+                "criterio_relevancia": criterio_relevancia,
+            }
+        )
+        return payload
+
     def info(self) -> dict:
         return self.motor.info_indice()
+
+    def _cargar_consultas_relevancia(self, ruta_consultas: str | Path) -> list[dict]:
+        ruta = Path(ruta_consultas)
+        if not ruta.exists():
+            return []
+        try:
+            datos = json.loads(ruta.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return []
+        if not isinstance(datos, list):
+            return []
+
+        consultas = []
+        for item in datos:
+            if not isinstance(item, dict):
+                continue
+            consulta = str(item.get("consulta", "") or "").strip()
+            if not consulta:
+                continue
+            relevantes = item.get("relevantes")
+            if isinstance(relevantes, list):
+                ids = [int(idx) for idx in relevantes if isinstance(idx, int) and 0 <= idx < len(self.corpus)]
+            else:
+                categoria = str(item.get("categoria_relevante", "") or "").strip()
+                ids = [
+                    idx
+                    for idx, doc in enumerate(self.corpus)
+                    if categoria and _categoria(doc) == categoria
+                ]
+            if not ids:
+                continue
+            consultas.append(
+                {
+                    "consulta": consulta,
+                    "relevantes": ids,
+                    "criterio_relevancia": item.get("criterio_relevancia", "Juicio configurado."),
+                }
+            )
+        return consultas
 
     def _enriquecer_resultado(self, resultado: dict) -> dict:
         doc = self.corpus[resultado.get("doc_id", -1)] if resultado.get("doc_id", -1) in range(len(self.corpus)) else {}

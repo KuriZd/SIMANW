@@ -1,5 +1,6 @@
 from rdflib import RDF
 from rdflib.namespace import DC, OWL
+import json
 
 from src.knowledge_graph import (
     QUERY_AC13_AUTORES_PRODUCTIVOS,
@@ -89,3 +90,14 @@ def test_fragmento_jsonld_coherente_con_grafo():
     assert fragmento["@type"] == "schema:NewsArticle"
     assert fragmento["title"] == "IA en salud"
     assert (kg.DATA["noticia_1"], RDF.type, kg.NS.Noticia) in kg.graph
+
+
+def test_fragmento_jsonld_se_puede_formatear_para_ui():
+    kg = _kg_ac13()
+
+    fragmento = kg.fragmento_jsonld_noticia(1)
+    texto = json.dumps(fragmento, ensure_ascii=False, indent=2)
+
+    assert isinstance(fragmento, dict)
+    assert '"@type": "schema:NewsArticle"' in texto
+    assert texto.splitlines()
