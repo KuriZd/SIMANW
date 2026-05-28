@@ -16,5 +16,17 @@ data/ac*.jsonl
 data/ac*.csv
 data/ac*.ttl
 data/ac*.jsonld
+data/analisis_*.json
+data/corpus_depurado_*.json
+data/enlaces_*.json
+data/kg_*.ttl
+data/noticias_ac*.json
+data/registros_rechazados_*.json
+data/resultados_*.json
+data/sesion_*.json
+data/wordcloud_*.png
 outputs/
+reports/
+logs/
+models/
 .pytest_deps/
