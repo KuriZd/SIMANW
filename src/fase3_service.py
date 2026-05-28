@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 from urllib.parse import urlparse
@@ -28,6 +29,24 @@ try:
     _TENDENCIAS_OK = True
 except ImportError:
     _TENDENCIAS_OK = False
+
+try:
+    from src.selector_modelo import SelectorModelo
+    _SELECTOR_OK = True
+except ImportError:
+    _SELECTOR_OK = False
+
+try:
+    from src.recomendacion import SistemaRecomendacion
+    _RECOMENDACION_OK = True
+except ImportError:
+    _RECOMENDACION_OK = False
+
+try:
+    from src.detector_publicidad import DetectorTemasPublicidad, NOTA_ETICA_PUBLICIDAD
+    _DETECTOR_OK = True
+except ImportError:
+    _DETECTOR_OK = False
 
 
 class Fase3Service:
@@ -77,7 +96,10 @@ class Fase3Service:
         # ── 2. Clasificación ──────────────────────────────────────────────────
         categorias_pred: list[str] = []
         scores_lista: list[dict] = []
-        if self._clasificador and noticias:
+        evidencia_ac3 = self._ejecutar_ac3(corpus or noticias, noticias, errores, advertencias)
+        if evidencia_ac3.get("_predicciones"):
+            categorias_pred = list(evidencia_ac3["_predicciones"])
+        elif self._clasificador and noticias:
             try:
                 noticias_clf = [dict(n) for n in noticias]
                 self._clasificador.clasificar_noticias(noticias_clf)
@@ -108,6 +130,9 @@ class Fase3Service:
             corpus_enriquecido.append(enr)
 
         # ── 5. Tendencias ─────────────────────────────────────────────────────
+        recomendaciones_data = self._generar_recomendaciones(corpus_enriquecido, advertencias)
+        temas_data = self._detectar_temas(corpus_enriquecido, advertencias)
+
         tendencias_data: dict = {}
         if _TENDENCIAS_OK and noticias_enriquecidas:
             try:
@@ -146,15 +171,142 @@ class Fase3Service:
             "sentimiento_dominante": sentimiento_dominante,
             "terminos_frecuentes": terminos_frecuentes,
             "tendencias": tendencias_data,
+            "recomendaciones": recomendaciones_data,
+            "temas_conversacion": temas_data,
             "clasificacion": {
-                "disponible": bool(self._clasificador),
+                "disponible": bool(self._clasificador) or evidencia_ac3.get("estado") in {"completo", "parcial"},
                 "categorias": list(cat_counter.keys()),
+                "ac3": {k: v for k, v in evidencia_ac3.items() if not k.startswith("_")},
             },
             "errores": errores,
             "advertencias": advertencias,
         }
 
         return noticias_enriquecidas, corpus_enriquecido, analisis
+
+    def _ejecutar_ac3(
+        self,
+        corpus: list[dict],
+        noticias: list[dict],
+        errores: list[str],
+        advertencias: list[str],
+    ) -> dict:
+        evidencia = {
+            "actividad": "AC-3",
+            "estado": "pendiente",
+            "ultima_ejecucion": datetime.now(timezone.utc).isoformat(),
+            "ejecutado_desde": "Load / Analyze News",
+            "modelos_comparados": [],
+            "mejor_modelo": "",
+            "accuracy": None,
+            "accuracy_std": None,
+            "total_textos": 0,
+            "total_clases": 0,
+            "fuente_datos": "corpus_fase2",
+            "_predicciones": [],
+        }
+        if not _SELECTOR_OK:
+            evidencia["observacion"] = "SelectorModelo no disponible."
+            return evidencia
+
+        textos, etiquetas = _dataset_supervisado(corpus)
+        evidencia["total_textos"] = len(textos)
+        evidencia["total_clases"] = len(set(etiquetas))
+        if not textos:
+            evidencia["observacion"] = "No hay textos etiquetados para entrenar AC-3."
+            return evidencia
+
+        _MIN_TEXTOS_CONFIABLES = 20
+        if len(textos) < _MIN_TEXTOS_CONFIABLES:
+            advertencias.append(
+                f"AC-3: corpus pequeño ({len(textos)} textos etiquetados). "
+                "Las métricas de validación cruzada no son estadísticamente representativas. "
+                f"Se recomiendan al menos {_MIN_TEXTOS_CONFIABLES} textos etiquetados."
+            )
+
+        selector = SelectorModelo()
+        try:
+            resultados = selector.evaluar_todos(textos, etiquetas, cv_folds=3)
+            pred_textos = [_texto_documento(item) for item in (noticias or corpus)]
+            pred_textos = [texto for texto in pred_textos if texto]
+            predicciones = selector.predecir(pred_textos) if pred_textos else []
+            mejor = selector.mejor_modelo[0] if selector.mejor_modelo else ""
+            metrica = resultados.get(mejor, {}) if mejor else {}
+            predicciones_prueba = [
+                {"indice": idx, "categoria_predicha": pred}
+                for idx, pred in enumerate(predicciones)
+            ]
+            selector.guardar_resultados(
+                "data/resultados_ac3.json",
+                textos=textos,
+                predicciones_prueba=predicciones_prueba,
+            )
+            selector.guardar_modelo("models/mejor_modelo_ac3.joblib", "models/vectorizer_ac3.joblib")
+            evidencia.update(
+                {
+                    "estado": "completo",
+                    "modelos_comparados": list(resultados.keys()),
+                    "mejor_modelo": mejor,
+                    "accuracy": metrica.get("accuracy_mean"),
+                    "accuracy_std": metrica.get("accuracy_std"),
+                    "resultados": resultados,
+                    "archivo_json": "data/resultados_ac3.json",
+                    "modelo": "models/mejor_modelo_ac3.joblib",
+                    "vectorizer": "models/vectorizer_ac3.joblib",
+                    "_predicciones": predicciones,
+                }
+            )
+        except Exception as exc:
+            evidencia["estado"] = "parcial"
+            evidencia["observacion"] = str(exc)
+            advertencias.append(f"AC-3 multimodelo no ejecutado con corpus real: {exc}")
+        return evidencia
+
+    def _generar_recomendaciones(self, corpus: list[dict], advertencias: list[str]) -> dict:
+        if not corpus:
+            return {"disponible": False, "por_noticia": []}
+        por_noticia = []
+        try:
+            if any(item.get("noticias_similares") for item in corpus):
+                for idx, item in enumerate(corpus):
+                    recomendaciones = item.get("noticias_similares", [])[:3]
+                    item["recomendaciones"] = recomendaciones
+                    por_noticia.append(
+                        {"indice": idx, "titulo": item.get("titulo", ""), "recomendaciones": recomendaciones}
+                    )
+            elif _RECOMENDACION_OK:
+                recomendador = SistemaRecomendacion(corpus)
+                for idx, item in enumerate(corpus):
+                    recomendaciones = recomendador.recomendar_detallado(idx, top_n=3)
+                    item["recomendaciones"] = recomendaciones
+                    por_noticia.append(
+                        {"indice": idx, "titulo": item.get("titulo", ""), "recomendaciones": recomendaciones}
+                    )
+        except Exception as exc:
+            advertencias.append(f"Recomendaciones: {exc}")
+        return {"disponible": bool(por_noticia), "por_noticia": por_noticia}
+
+    def _detectar_temas(self, corpus: list[dict], advertencias: list[str]) -> dict:
+        if not _DETECTOR_OK or not corpus:
+            return {"disponible": False, "resultados": []}
+        try:
+            detector = DetectorTemasPublicidad()
+            conversacion = [
+                ("corpus", f"{item.get('titulo', '')} {item.get('texto_original', '')[:220]}")
+                for item in corpus
+                if _texto_documento(item)
+            ]
+            resultados = detector.simular_chat(conversacion)
+            resumen = detector.resumen_temas()
+            return {
+                "disponible": True,
+                "resultados": resultados,
+                "resumen": resumen,
+                "nota_etica": NOTA_ETICA_PUBLICIDAD,
+            }
+        except Exception as exc:
+            advertencias.append(f"Detector de temas: {exc}")
+            return {"disponible": False, "resultados": [], "error": str(exc)}
 
     def exportar(
         self,
@@ -201,3 +353,31 @@ class Fase3Service:
 def _dominio(url: str) -> str:
     parsed = urlparse(url)
     return parsed.netloc or url
+
+
+def _texto_documento(item: dict) -> str:
+    return " ".join(
+        str(item.get(campo, "") or "")
+        for campo in ("texto_limpio", "texto_original", "titulo", "cuerpo", "resumen")
+    ).strip()
+
+
+def _etiqueta_documento(item: dict) -> str:
+    return str(
+        item.get("categoria_original")
+        or item.get("categoria")
+        or item.get("category")
+        or ""
+    ).strip()
+
+
+def _dataset_supervisado(corpus: list[dict]) -> tuple[list[str], list[str]]:
+    textos: list[str] = []
+    etiquetas: list[str] = []
+    for item in corpus:
+        texto = _texto_documento(item)
+        etiqueta = _etiqueta_documento(item)
+        if texto and etiqueta and etiqueta != "sin_categoria":
+            textos.append(texto)
+            etiquetas.append(etiqueta)
+    return textos, etiquetas

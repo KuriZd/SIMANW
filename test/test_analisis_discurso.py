@@ -27,7 +27,7 @@ def test_analisis_discurso_detecta_entidades_heuristicas():
     analizador = AnalisisDiscurso()
 
     resultado = analizador.analizar(TEXTO, "Discurso")
-    entidades = [entidad for entidad, _ in resultado["posibles_entidades"]]
+    entidades = [entidad[0] for entidad in resultado["posibles_entidades"]]
 
     assert "Mexico" in entidades
     assert "Instituto" in entidades
@@ -43,4 +43,4 @@ def test_analisis_discurso_compara_textos():
 
     assert len(comparativa) == 2
     assert comparativa[0]["titulo"] == "Texto A"
-    assert set(comparativa[0]) == {"titulo", "palabras", "vocabulario", "riqueza", "promedio_oracion"}
+    assert set(comparativa[0]) == {"titulo", "palabras", "vocabulario", "riqueza", "promedio_oracion", "top_bigrama", "top_trigrama"}

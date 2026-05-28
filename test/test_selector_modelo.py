@@ -51,3 +51,40 @@ def test_selector_modelo_valida_datos():
 
     with pytest.raises(ValueError):
         selector.evaluar_todos(["a", "b"], ["x", "y"], cv_folds=1)
+
+
+def test_selector_modelo_rechaza_una_sola_clase():
+    selector = SelectorModelo()
+    with pytest.raises(ValueError, match="al menos dos clases"):
+        selector.evaluar_todos(["texto a", "texto b"], ["misma", "misma"])
+
+
+def test_selector_modelo_ajusta_folds_con_pocas_muestras():
+    selector = SelectorModelo()
+    textos = ["texto a uno", "texto b dos", "texto c tres", "texto d cuatro"]
+    etiquetas = ["A", "A", "B", "B"]
+    resultados = selector.evaluar_todos(textos, etiquetas, cv_folds=5)
+    assert selector.mejor_modelo is not None
+    for nombre, metricas in resultados.items():
+        if "accuracy_mean" in metricas:
+            assert len(metricas["scores"]) <= 2
+
+
+def test_selector_modelo_round_trip_guardar_cargar(tmp_path):
+    selector = SelectorModelo()
+    selector.evaluar_todos(TEXTOS_AC3, ETIQUETAS_AC3, cv_folds=3)
+    ruta_modelo = tmp_path / "modelo.joblib"
+    ruta_vec = tmp_path / "vectorizer.joblib"
+    selector.guardar_modelo(ruta_modelo, ruta_vec)
+
+    selector2 = SelectorModelo()
+    selector2.cargar_modelo(ruta_modelo, ruta_vec)
+    preds = selector2.predecir(["inteligencia artificial machine learning"])
+    assert preds[0] in {"tecnologia", "economia", "ciencia", "politica"}
+
+
+def test_selector_modelo_predice_con_mismo_vectorizador():
+    selector = SelectorModelo()
+    selector.evaluar_todos(TEXTOS_AC3, ETIQUETAS_AC3, cv_folds=3)
+    pred = selector.predecir(["inflacion banco central tasas interes"])
+    assert pred[0] == "economia"

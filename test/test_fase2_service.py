@@ -43,7 +43,7 @@ CAMPOS_ESPERADOS = [
     "tokens", "terminos", "stems",
     "num_tokens", "num_terminos", "num_oraciones",
     "vocabulario_unico", "riqueza_lexica",
-    "terminos_relevantes",
+    "terminos_relevantes", "noticias_similares",
 ]
 
 
@@ -72,6 +72,7 @@ def test_item_tiene_schema_completo():
     assert isinstance(item["terminos"], list)
     assert isinstance(item["stems"], list)
     assert isinstance(item["terminos_relevantes"], list)
+    assert isinstance(item["noticias_similares"], list)
     assert isinstance(item["num_tokens"], int)
     assert isinstance(item["num_terminos"], int)
     assert isinstance(item["num_oraciones"], int)
@@ -177,3 +178,13 @@ def test_tfidf_falla_corpus_valido(monkeypatch):
         assert item["terminos_relevantes"] == []
     assert len(resultado.errores) > 0
     assert any("RepresentacionVectorial" in e or "TF-IDF" in e for e in resultado.errores)
+
+
+def test_procesar_corpus_incluye_similitud_y_grupos():
+    service = Fase2Service()
+    resultado = service.procesar_corpus(NOTICIAS_PRUEBA)
+
+    assert "grupos_similares" in resultado.estadisticas
+    assert "pares_similares" in resultado.estadisticas
+    assert len(resultado.estadisticas["pares_similares"]) == len(NOTICIAS_PRUEBA)
+    assert all("noticias_similares" in item for item in resultado.corpus)

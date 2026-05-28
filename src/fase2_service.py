@@ -24,6 +24,7 @@ from src.pipeline_nlp import PipelineNLP
 
 try:
     from src.representacion_vectorial import RepresentacionVectorial
+    from src.similitud import CalculadorSimilitud
     _TFIDF_DISPONIBLE = True
 except ImportError:
     _TFIDF_DISPONIBLE = False
@@ -120,6 +121,33 @@ class Fase2Service:
         estadisticas = pipeline.estadisticas_corpus(nlp_results)
         if tfidf_ok and repr_vectorial is not None:
             estadisticas.update(repr_vectorial.info_matriz())
+            try:
+                calculador = CalculadorSimilitud(repr_vectorial.matriz)
+                grupos = calculador.agrupar_por_similitud(umbral=0.15)
+                pares_similares = []
+                for idx, item in enumerate(corpus):
+                    similares = [
+                        {
+                            "indice": sim_idx,
+                            "titulo": corpus[sim_idx]["titulo"],
+                            "similitud": round(score, 4),
+                        }
+                        for sim_idx, score in calculador.documentos_similares(idx, top_n=3)
+                        if score > 0
+                    ]
+                    item["noticias_similares"] = similares
+                    pares_similares.append({"indice": idx, "titulo": item["titulo"], "similares": similares})
+                estadisticas["grupos_similares"] = grupos
+                estadisticas["pares_similares"] = pares_similares
+            except Exception as exc:
+                errores.append(f"Similitud coseno no disponible: {exc}")
+                estadisticas["grupos_similares"] = []
+                estadisticas["pares_similares"] = []
+        else:
+            for item in corpus:
+                item["noticias_similares"] = []
+            estadisticas["grupos_similares"] = []
+            estadisticas["pares_similares"] = []
 
         return ResultadoFase2(corpus=corpus, estadisticas=estadisticas, errores=errores)
 

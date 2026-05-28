@@ -40,3 +40,13 @@ def test_analizador_sentimientos_usa_lexico_espanol():
 
     assert negativo["etiqueta"] == "negativo"
     assert positivo["etiqueta"] == "positivo"
+
+
+def test_analizador_sentimientos_maneja_noticias_sin_cuerpo():
+    analizador = AnalizadorSentimientos()
+    noticias = [{"titulo": "Avances", "resumen": "mejoras y avances significativos"}]
+
+    resultados, resumen = analizador.analizar_noticias(noticias)
+
+    assert resultados[0]["etiqueta"] == "positivo"
+    assert resumen["distribucion"]["positivo"] == 1
