@@ -111,6 +111,32 @@ class TrazabilidadPipeline:
             "del corpus y de los modelos locales disponibles."
         )
 
+    def guardar_checklist(self, ruta: str | Path, alumno: str) -> Path:
+        ruta = Path(ruta)
+        ruta.parent.mkdir(parents=True, exist_ok=True)
+        lineas = [
+            "# AC-12: Checklist de Reproducibilidad",
+            "",
+            self.checklist_firmado(alumno),
+        ]
+        ruta.write_text("\n".join(lineas), encoding="utf-8")
+        return ruta
+
+    def guardar_limitaciones(self, ruta: str | Path = "reports/limitaciones_ac12.md") -> Path:
+        ruta = Path(ruta)
+        ruta.parent.mkdir(parents=True, exist_ok=True)
+        lineas = [
+            "# AC-12: Anexo de Limitaciones del Pipeline",
+            "",
+            self.anexo_limitaciones(),
+            "",
+            "## Procedimiento reproducible",
+            "",
+            self.procedimiento_reproducible(),
+        ]
+        ruta.write_text("\n".join(lineas), encoding="utf-8")
+        return ruta
+
 
 def trazabilidad_demo() -> TrazabilidadPipeline:
     traza = TrazabilidadPipeline("data/noticias_extraidas.json", version_proyecto="demo-ac12")

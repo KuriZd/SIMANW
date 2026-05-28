@@ -69,3 +69,61 @@ def test_capacidades_y_resumen_pipeline_final():
     assert ("Reportes", "Generacion automatica de resumenes") in capacidades
     assert "Fase 1: RASTREO WEB" in resumen
     assert "Fase 7: REPORTES + ENTREGA" in resumen
+
+
+def test_reporte_markdown_incluye_pipeline_evidencias_y_metricas_integradas():
+    reportero = GeneradorReportes(noticias_demo(), kg_demo())
+
+    reporte = reportero.reporte_markdown(
+        analisis={
+            "clasificacion": {
+                "ac3": {
+                    "estado": "completo",
+                    "mejor_modelo": "LinearSVC",
+                    "accuracy_promedio": 0.82,
+                    "accuracy_std": 0.03,
+                    "archivo_json": "data/resultados_ac3.json",
+                }
+            },
+            "evaluacion_busqueda": {
+                "estado": "completo",
+                "total_consultas": 3,
+                "ganador_f1": "vectorial",
+                "ganador_map": "vectorial",
+                "map_booleano": 0.4,
+                "map_vectorial": 0.7,
+                "archivo_json": "data/resultados_ac5.json",
+            },
+        },
+        grafo_info={
+            "total_triples": 25,
+            "evidencia_ac7": {
+                "estado": "parcial",
+                "entidades_evaluadas": 4,
+                "total_enlaces_externos": 1,
+                "endpoint": "https://query.wikidata.org/sparql",
+                "archivo_ttl": "data/kg_enriquecido_ac7.ttl",
+            },
+        },
+        evidencias_ac={"AC-5": {"estado": "completo", "ejecutado_desde": "Search & Q&A", "archivo_json": "data/resultados_ac5.json"}},
+        estado_pipeline={"extraccion": "completed", "reportes": "completed"},
+        archivos_generados=["outputs/reportes/reporte_final.md"],
+        generado_en=datetime(2026, 5, 15, 10, 30, 0),
+    )
+
+    assert "Estado del pipeline" in reporte
+    assert "Evidencia academica integrada" in reporte
+    assert "Clasificacion multimodelo (AC-3)" in reporte
+    assert "Evaluacion del motor de busqueda (AC-5)" in reporte
+    assert "Knowledge Graph y Wikidata (AC-7)" in reporte
+    assert "outputs/reportes/reporte_final.md" in reporte
+
+
+def test_reportes_no_fallan_con_campos_faltantes():
+    reportero = GeneradorReportes([{"titulo": "Noticia sin metadatos"}], kg_demo())
+
+    texto = reportero.reporte_completo()
+    markdown = reportero.reporte_markdown()
+
+    assert "Noticia sin metadatos" in texto
+    assert "Catalogo de noticias procesadas" in markdown

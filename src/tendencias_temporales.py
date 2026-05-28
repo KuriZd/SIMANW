@@ -243,6 +243,30 @@ class TendenciasTemporales:
         )
         return texto
 
+    def guardar_reporte_json(self, ruta: str | Path = "reports/tendencias_ac9.json") -> Path:
+        """Exporta conteos, pico y tabla a JSON."""
+        import json
+        ruta = Path(ruta)
+        ruta.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "actividad": "AC-9",
+            "granularidad": self.granularidad,
+            "total_noticias": len(self.noticias),
+            "conteo_por_periodo": self.conteo_por_periodo(),
+            "tabla_resumen": self.tabla_resumen(),
+            "pico_notable": self.pico_notable(),
+        }
+        with ruta.open("w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+        return ruta
+
+    def guardar_conclusion_markdown(self, ruta: str | Path = "reports/conclusion_tendencias_ac9.md") -> Path:
+        """Exporta la conclusion como archivo Markdown."""
+        ruta = Path(ruta)
+        ruta.parent.mkdir(parents=True, exist_ok=True)
+        ruta.write_text(self.conclusion(), encoding="utf-8")
+        return ruta
+
     # ------------------------------------------------------------------
     # Internos
     # ------------------------------------------------------------------

@@ -192,6 +192,14 @@ def ejecutar_ac5() -> None:
 
     comparador = ComparadorModelos(NOTICIAS_COMPLEMENTARIAS)
     print(comparador.reporte(CONSULTAS_EVAL_AC5))
+
+    evaluacion = comparador.evaluar_consultas(CONSULTAS_EVAL_AC5)
+    print(f"Ganador F1   : {evaluacion['ganador_f1']}")
+    print(f"Conclusion   : {comparador.generar_conclusion(evaluacion)}")
+
+    ruta_ac5 = Path("data") / "resultados_ac5.json"
+    comparador.guardar_json(ruta_ac5, CONSULTAS_EVAL_AC5)
+    print(f"Reporte JSON : {ruta_ac5}")
     print()
 
 
@@ -210,9 +218,21 @@ def ejecutar_ac6() -> None:
 
     stats = chatbot.estadisticas_sesion()
     print("Estadisticas de sesion:")
-    print(f"  Interacciones: {stats['interacciones']}")
-    print(f"  Temas de interes: {stats['temas_interes']}")
-    print(f"  Tipos de respuesta: {dict(stats['tipos_respuesta'])}")
+    print(f"  Interacciones           : {stats['interacciones']}")
+    print(f"  Temas de interes        : {stats['temas_interes']}")
+    print(f"  Tipos de respuesta      : {dict(stats['tipos_respuesta'])}")
+    print(f"  Ultima consulta expand. : {stats['ultima_consulta_expandida'][:60] or '(ninguna)'}")
+    print(f"  Tiene contexto          : {stats['tiene_contexto']}")
+
+    ref_test = "Dame mas detalles sobre eso"
+    detecta = chatbot.detectar_referencia_contextual(ref_test)
+    expandida = chatbot.expandir_consulta(ref_test)
+    print(f"\n  detectar_referencia_contextual('{ref_test}'): {detecta}")
+    print(f"  expandir_consulta resultado : {expandida[:70]}")
+
+    ruta_ac6 = Path("data") / "sesion_chatbot_ac6.json"
+    chatbot.guardar_sesion(ruta_ac6)
+    print(f"  Sesion guardada : {ruta_ac6}")
     print()
 
 
@@ -250,6 +270,23 @@ def ejecutar_ac7() -> None:
 
     print("\nQuery sugerida para Wikidata (tecnologia):")
     print(enriquecedor.generar_query_wikidata("tecnologia"))
+
+    print("\nBuscar entidad por nombre (query generada):")
+    print(enriquecedor.buscar_entidad_wikidata("Inteligencia artificial"))
+
+    print("\nConsulta opcional al endpoint real de Wikidata:")
+    resultados_wd = enriquecedor.consultar_wikidata(enriquecedor.generar_query_wikidata("economia"))
+    if resultados_wd:
+        print(f"  Resultados obtenidos: {len(resultados_wd)}")
+    else:
+        print("  (sin conexion o SPARQLWrapper no disponible - enriquecimiento local completado)")
+
+    ruta_ttl = Path("data") / "kg_enriquecido_ac7.ttl"
+    ruta_json_ac7 = Path("data") / "enlaces_wikidata_ac7.json"
+    enriquecedor.guardar_grafo(ruta_ttl)
+    enriquecedor.guardar_reporte_json(ruta_json_ac7)
+    print(f"\n  Grafo Turtle guardado : {ruta_ttl}")
+    print(f"  Reporte JSON guardado : {ruta_json_ac7}")
     print()
 
 

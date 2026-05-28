@@ -31,10 +31,27 @@ class Fase7Service:
                 tendencias=resultado.analisis.get("tendencias", {}),
                 consultas_busqueda=[{"consulta": "demo", "resultados": resultado.resultados_busqueda}],
                 respuestas_chatbot=[{"pregunta": "Resumen", "respuesta": resultado.respuesta_qa or ""}],
+                analisis=resultado.analisis,
+                grafo_info=resultado.grafo_info,
+                evidencias_ac=resultado.evidencias_ac,
+                estado_pipeline=resultado.pipeline_estado,
+                archivos_generados=resultado.archivos_generados,
             )
 
         contenido = self._reporte_fallback(resultado)
         return guardar_markdown(contenido, "outputs/reportes/reporte_final.md")
+
+    def generar_reporte_json(self, resultado) -> Path:
+        kg = getattr(getattr(resultado, "_grafo_obj", None), "kg", None)
+        generador = GeneradorReportes(resultado.corpus_procesado, kg)
+        return generador.guardar_reporte_json(
+            "outputs/reportes/reporte_final.json",
+            analisis=resultado.analisis,
+            grafo_info=resultado.grafo_info,
+            evidencias_ac=resultado.evidencias_ac,
+            estado_pipeline=resultado.pipeline_estado,
+            archivos_generados=resultado.archivos_generados,
+        )
 
     def generar_manifiesto(self, resultado) -> Path:
         self.run_dir.mkdir(parents=True, exist_ok=True)

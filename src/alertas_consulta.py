@@ -99,6 +99,41 @@ class SistemaAlertasConsulta:
             "el indice sea reprocesado o la noticia reaparezca en otra ejecucion."
         )
 
+    def guardar_reporte_markdown(self, ruta: str | Path = "reports/alertas_ac10.md") -> Path:
+        ruta = Path(ruta)
+        ruta.parent.mkdir(parents=True, exist_ok=True)
+        total_alertas = len(self.historial_alertas)
+        consultas_activas = len(self.consultas)
+        lineas = [
+            "# AC-10: Reporte de Alertas por Consulta Guardada",
+            "",
+            f"**Consultas activas:** {consultas_activas}  ",
+            f"**Alertas generadas:** {total_alertas}  ",
+            "",
+            "## Consultas registradas",
+            "",
+        ]
+        for c in self.consultas:
+            lineas.append(f"- **{c.nombre}**: `{c.expresion}` (desde {c.fecha_creacion})")
+        lineas += [
+            "",
+            "## Mecanismo de deduplicacion",
+            "",
+            self.documentar_deduplicacion(),
+            "",
+            "## Historial de alertas",
+            "",
+        ]
+        if self.historial_alertas:
+            for alerta in self.historial_alertas:
+                lineas.append(
+                    f"- [{alerta['titulo']}]({alerta['url']}) — consulta: **{alerta['consulta']}** ({alerta['marca_tiempo']})"
+                )
+        else:
+            lineas.append("_Sin alertas generadas en esta ejecucion._")
+        ruta.write_text("\n".join(lineas), encoding="utf-8")
+        return ruta
+
     @staticmethod
     def _texto_busqueda(noticia: dict) -> str:
         return f"{noticia.get('titulo', '')} {noticia.get('cuerpo', '')}".lower()

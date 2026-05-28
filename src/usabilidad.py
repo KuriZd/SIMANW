@@ -97,6 +97,44 @@ class EstudioUsabilidad:
             "consultas personales o datos que permitan identificar a participantes."
         )
 
+    def guardar_reporte_markdown(self, ruta: str | Path = "reports/usabilidad_ac11.md") -> Path:
+        ruta = Path(ruta)
+        ruta.parent.mkdir(parents=True, exist_ok=True)
+        promedios = self.promedios()
+        pms = self.problemas_y_mejoras()
+        lineas = [
+            "# AC-11: Reporte de Usabilidad del Buscador y Chatbot",
+            "",
+            f"**Participantes:** {len(self.participantes)}  ",
+            "",
+            "## Promedios por item (escala 1-5)",
+            "",
+        ]
+        for item, valor in promedios.items():
+            lineas.append(f"- {item}: **{valor}**")
+        lineas += [
+            "",
+            "## Problemas identificados y mejoras propuestas",
+            "",
+        ]
+        for i, pm in enumerate(pms, 1):
+            lineas.append(f"### {i}. {pm['problema']}")
+            lineas.append(f"**Mejora:** {pm['mejora']}")
+            lineas.append("")
+        ruta.write_text("\n".join(lineas), encoding="utf-8")
+        return ruta
+
+    def guardar_reflexion_etica(self, ruta: str | Path = "reports/reflexion_etica_ac11.md") -> Path:
+        ruta = Path(ruta)
+        ruta.parent.mkdir(parents=True, exist_ok=True)
+        lineas = [
+            "# AC-11: Reflexion Etica y Consentimiento Informado",
+            "",
+            self.reflexion_consentimiento(),
+        ]
+        ruta.write_text("\n".join(lineas), encoding="utf-8")
+        return ruta
+
 
 def estudio_demo() -> EstudioUsabilidad:
     estudio = EstudioUsabilidad()
