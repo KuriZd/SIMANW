@@ -31,22 +31,22 @@ class SeccionCargar(ctk.CTkFrame):
         self.service         = SIMANWAppService()
         self.fuentes_service = FuentesService()
 
-        estado_form = getattr(root_app, "load_form_state", {}) or {}
+        self._estado_form = getattr(root_app, "load_form_state", {}) or {}
 
-        self.modo_var        = ctk.StringVar(value=estado_form.get("modo", _MODO_DEMO))
+        self.modo_var        = ctk.StringVar(value=self._estado_form.get("modo", _MODO_DEMO))
         self.fuente_predef_var = ctk.StringVar()
-        self.tipo_custom_var = ctk.StringVar(value=estado_form.get("tipo_custom", "RSS"))
-        self.url_var         = ctk.StringVar(value=estado_form.get("url", ""))
-        self.selector_articulos_var = ctk.StringVar(value=estado_form.get("selector_articulos", "article"))
+        self.tipo_custom_var = ctk.StringVar(value=self._estado_form.get("tipo_custom", "RSS"))
+        self.url_var         = ctk.StringVar(value=self._estado_form.get("url", ""))
+        self.selector_articulos_var = ctk.StringVar(value=self._estado_form.get("selector_articulos", "article"))
         self.selector_siguiente_var = ctk.StringVar(
-            value=estado_form.get("selector_siguiente", "a[rel='next'], a.next-page, .next a")
+            value=self._estado_form.get("selector_siguiente", "a[rel='next'], a.next-page, .next a")
         )
-        self.selector_titulo_var = ctk.StringVar(value=estado_form.get("selector_titulo", ""))
-        self.selector_resumen_var = ctk.StringVar(value=estado_form.get("selector_resumen", ""))
-        self.selector_url_var = ctk.StringVar(value=estado_form.get("selector_url", ""))
-        self.max_paginas_var = ctk.StringVar(value=estado_form.get("max_paginas", "5"))
-        self.delay_var = ctk.StringVar(value=estado_form.get("delay", "3"))
-        self.min_noticias_var = ctk.StringVar(value=estado_form.get("min_noticias", "20"))
+        self.selector_titulo_var = ctk.StringVar(value=self._estado_form.get("selector_titulo", ""))
+        self.selector_resumen_var = ctk.StringVar(value=self._estado_form.get("selector_resumen", ""))
+        self.selector_url_var = ctk.StringVar(value=self._estado_form.get("selector_url", ""))
+        self.max_paginas_var = ctk.StringVar(value=self._estado_form.get("max_paginas", "5"))
+        self.delay_var = ctk.StringVar(value=self._estado_form.get("delay", "3"))
+        self.min_noticias_var = ctk.StringVar(value=self._estado_form.get("min_noticias", "20"))
 
         self._step_icon_labels: list[ctk.CTkLabel] = []
         self._step_text_labels: list[ctk.CTkLabel] = []
@@ -105,7 +105,7 @@ class SeccionCargar(ctk.CTkFrame):
         # selector fuente predefinida (visible solo en modo PREDEF)
         nombres = self.fuentes_service.listar_nombres_fuentes()
         if nombres:
-            fuente_predef = estado_form.get("fuente_predef", nombres[0])
+            fuente_predef = self._estado_form.get("fuente_predef", nombres[0])
             self.fuente_predef_var.set(fuente_predef if fuente_predef in nombres else nombres[0])
         self.selector_predef = ctk.CTkOptionMenu(
             card,
