@@ -1,6 +1,8 @@
 """AC-2: Análisis estadístico de discursos — panel de escritorio."""
 from __future__ import annotations
 
+# LEGACY UI: este frame no forma parte del sidebar principal de app_desktop.py.
+
 import threading
 from pathlib import Path
 from tkinter import messagebox

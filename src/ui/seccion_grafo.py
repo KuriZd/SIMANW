@@ -36,9 +36,11 @@ class SeccionGrafo(ctk.CTkFrame):
         right.grid_rowconfigure(4, weight=1)
 
         info = self.root_app.grafo_info
+        evidencia_ac7 = info.get("evidencia_ac7", {}) if isinstance(info, dict) else {}
         items = [
             ("Triples RDF", str(info.get("total_triples", 0))),
             ("Wikidata links", str(info.get("entidades", {}).get("enlaces_wikidata", 0))),
+            ("Wikidata mode", "online" if evidencia_ac7.get("wikidata_online") else "offline"),
             ("Formatos", ", ".join(info.get("formatos_exportados", [])) or "N/D"),
             ("Errores", str(len(info.get("errores", [])))),
         ]

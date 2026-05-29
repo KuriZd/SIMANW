@@ -1,4 +1,5 @@
 """AC-3: Seleccion automatica de modelo de clasificacion."""
+# LEGACY UI: este frame no forma parte del sidebar principal de app_desktop.py.
 from __future__ import annotations
 
 import threading

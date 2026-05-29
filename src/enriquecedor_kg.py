@@ -139,6 +139,7 @@ class EnriquecedorKG:
         """Busca entidades reales del KG local en Wikidata y agrega enlaces validados."""
         triples_antes = len(self._graph_obj)
         entidades = self.entidades_locales_enriquecibles(limite=limite_entidades)
+        wikidata_online = self._wikidata_client is not None or os.environ.get("SIMANW_WIKIDATA_ONLINE") == "1"
         evaluadas = 0
         rechazadas: list[dict] = []
 
@@ -166,6 +167,8 @@ class EnriquecedorKG:
             "estado": "completo" if self.enlaces_externos else "parcial",
             "ultima_ejecucion": datetime.now(timezone.utc).isoformat(),
             "endpoint": self.ENDPOINT,
+            "wikidata_online": wikidata_online,
+            "modo": "online" if wikidata_online else "offline",
             "entidades_evaluadas": evaluadas,
             "total_enlaces_externos": len(self.enlaces_externos),
             "triples_antes": triples_antes,
@@ -174,6 +177,11 @@ class EnriquecedorKG:
             "rechazadas": rechazadas,
             "errores": self.errores,
             "validacion": "Etiqueta local normalizada debe coincidir con etiqueta Wikidata normalizada.",
+            "observacion": (
+                "" if wikidata_online else
+                "Wikidata online deshabilitado; no se afirma enriquecimiento externo real. "
+                "Define SIMANW_WIKIDATA_ONLINE=1 para consultar el endpoint."
+            ),
         }
 
     # ------------------------------------------------------------------

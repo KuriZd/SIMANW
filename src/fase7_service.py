@@ -26,10 +26,11 @@ class Fase7Service:
         kg = getattr(getattr(resultado, "_grafo_obj", None), "kg", None)
         if kg is not None:
             generador = GeneradorReportes(resultado.corpus_procesado, kg)
+            consulta_reporte = resultado.analisis.get("consulta_busqueda_reporte") or "sin consulta registrada"
             return generador.guardar_reporte_markdown(
                 "outputs/reportes/reporte_final.md",
                 tendencias=resultado.analisis.get("tendencias", {}),
-                consultas_busqueda=[{"consulta": "demo", "resultados": resultado.resultados_busqueda}],
+                consultas_busqueda=[{"consulta": consulta_reporte, "resultados": resultado.resultados_busqueda}],
                 respuestas_chatbot=[{"pregunta": "Resumen", "respuesta": resultado.respuesta_qa or ""}],
                 analisis=resultado.analisis,
                 grafo_info=resultado.grafo_info,

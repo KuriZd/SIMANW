@@ -1,4 +1,5 @@
 """AC-13: Publicacion semantica y validacion RDF del Knowledge Graph."""
+# LEGACY UI: este frame no forma parte del sidebar principal de app_desktop.py.
 from __future__ import annotations
 
 import json

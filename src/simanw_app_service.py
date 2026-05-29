@@ -8,7 +8,7 @@ from typing import Callable
 from urllib.parse import urlparse
 
 from src.exportador import guardar_json
-from src.alertas_consulta import SistemaAlertasConsulta, consultas_demo
+from src.alertas_consulta import ConsultaGuardada, SistemaAlertasConsulta, consultas_demo
 from src.analisis_discurso import AnalisisDiscurso
 from src.control_calidad import ControlCalidadCorpus
 from src.fase1_service import Fase1Service
@@ -242,6 +242,7 @@ class SIMANWAppService:
                 self.fase4_service.construir_indice(corpus)
                 self.motor_busqueda = self.fase4_service.motor
                 resultados_busqueda = self.fase4_service.buscar("noticias tecnologia economia", top_k=5)
+                analisis["consulta_busqueda_reporte"] = "noticias tecnologia economia"
                 evidencia_ac5 = self.fase4_service.evaluar_modelos_busqueda()
                 if evidencia_ac5:
                     evidencias_ac["AC-5"] = {
@@ -315,6 +316,8 @@ class SIMANWAppService:
                         "ultima_ejecucion": evidencia_ac7.get("ultima_ejecucion"),
                         "ejecutado_desde": "Knowledge Graph",
                         "endpoint": evidencia_ac7.get("endpoint"),
+                        "wikidata_online": evidencia_ac7.get("wikidata_online", False),
+                        "modo": evidencia_ac7.get("modo", "offline"),
                         "entidades_evaluadas": evidencia_ac7.get("entidades_evaluadas"),
                         "total_enlaces_externos": evidencia_ac7.get("total_enlaces_externos"),
                         "triples_antes": evidencia_ac7.get("triples_antes"),
@@ -322,6 +325,7 @@ class SIMANWAppService:
                         "archivo_ttl": evidencia_ac7.get("archivo_ttl"),
                         "archivo_json": evidencia_ac7.get("archivo_json"),
                         "observacion": evidencia_ac7.get("observacion"),
+                        "errores": evidencia_ac7.get("errores", []),
                     }
                     if evidencia_ac7.get("archivo_ttl"):
                         rutas["kg_enriquecido_ac7_ttl"] = evidencia_ac7["archivo_ttl"]
@@ -389,6 +393,7 @@ class SIMANWAppService:
                 "archivo_json": str(reporte_json),
                 "manifest": str(manifiesto),
                 "pipeline_log": str(log),
+                "consulta_busqueda_reporte": analisis.get("consulta_busqueda_reporte", "sin consulta registrada"),
             }
             self.fase7_service.generar_reporte_final(resultado)
             self.fase7_service.generar_reporte_json(resultado)
@@ -505,7 +510,8 @@ class SIMANWAppService:
         }
 
     def _ejecutar_ac10(self, corpus: list[dict]) -> dict:
-        sistema = SistemaAlertasConsulta(consultas_demo())
+        consultas, origen_consultas = self._cargar_consultas_ac10()
+        sistema = SistemaAlertasConsulta(consultas)
         sin_noticias = sistema.procesar_noticias_nuevas([])
         noticias_alertas = [self._noticia_para_alerta(item, idx) for idx, item in enumerate(corpus, start=1)]
         alertas = sistema.procesar_noticias_nuevas(noticias_alertas)
@@ -516,11 +522,15 @@ class SIMANWAppService:
         ruta_historial = sistema.guardar_historial("data/ac10_historial_alertas.json")
         ruta_reporte = sistema.guardar_reporte_markdown("reports/alertas_ac10.md")
         estado = "completo" if alertas else "parcial"
+        if origen_consultas != "archivo_configurado":
+            estado = "parcial"
         return {
             "actividad": "AC-10",
             "estado": estado,
             "ultima_ejecucion": datetime.now(timezone.utc).isoformat(),
             "ejecutado_desde": "Search & Q&A",
+            "origen_consultas": origen_consultas,
+            "consultas_reales": origen_consultas == "archivo_configurado",
             "consultas_guardadas": [consulta.nombre for consulta in sistema.consultas],
             "numero_consultas": len(sistema.consultas),
             "historial_alertas": len(sistema.historial_alertas),
@@ -684,6 +694,23 @@ class SIMANWAppService:
     def _cargar_estudio_usabilidad() -> tuple[EstudioUsabilidad, str]:
         ruta = Path("data/usabilidad_participantes.json")
         if not ruta.exists():
+            ruta_csv = Path("data/usabilidad_participantes.csv")
+            if ruta_csv.exists():
+                import csv
+
+                estudio = EstudioUsabilidad()
+                with ruta_csv.open("r", encoding="utf-8", newline="") as archivo:
+                    for fila in csv.DictReader(archivo):
+                        codigo = str(fila.get("participante") or fila.get("codigo") or "P?")
+                        respuestas = {
+                            item: int(fila[item])
+                            for item in estudio.items
+                            if str(fila.get(item, "")).strip()
+                        }
+                        problemas_raw = str(fila.get("problemas") or "").strip()
+                        problemas = [p.strip() for p in problemas_raw.split("|") if p.strip()]
+                        estudio.registrar_participante(codigo, respuestas, problemas)
+                return estudio, "archivo_real"
             return estudio_demo(), "demo"
         datos = json.loads(ruta.read_text(encoding="utf-8"))
         estudio = EstudioUsabilidad()
@@ -696,6 +723,34 @@ class SIMANWAppService:
                 list(item.get("problemas", [])),
             )
         return estudio, "archivo_real"
+
+    @staticmethod
+    def _cargar_consultas_ac10() -> tuple[list[ConsultaGuardada], str]:
+        rutas = [
+            (Path("config/consultas_ac10.json"), "archivo_configurado"),
+            (Path("data/ac10_consultas_guardadas.json"), "archivo_guardado"),
+        ]
+        for ruta, origen in rutas:
+            if not ruta.exists() or ruta.stat().st_size == 0:
+                continue
+            try:
+                datos = json.loads(ruta.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(datos, list):
+                continue
+            consultas: list[ConsultaGuardada] = []
+            for item in datos:
+                if not isinstance(item, dict):
+                    continue
+                nombre = str(item.get("nombre") or item.get("consulta") or "").strip()
+                expresion = str(item.get("expresion") or item.get("query") or "").strip()
+                fecha = str(item.get("fecha_creacion") or datetime.now(timezone.utc).isoformat())
+                if nombre and expresion:
+                    consultas.append(ConsultaGuardada(nombre, expresion, fecha))
+            if consultas:
+                return consultas, origen
+        return consultas_demo(), "plantilla_demo"
 
     def _cargar_noticias(
         self,

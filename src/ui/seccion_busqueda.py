@@ -136,8 +136,10 @@ class SeccionBusquedaQA(ctk.CTkFrame):
         consultas = evidencia.get("consultas_guardadas", [])
         return (
             f"Estado: {evidencia.get('estado', 'pendiente')} | "
+            f"Origen: {evidencia.get('origen_consultas', 'sin consultas')} | "
             f"Consultas: {evidencia.get('numero_consultas', len(consultas))} | "
             f"Alertas: {evidencia.get('alertas_generadas', 0)} | "
+            f"Historial: {evidencia.get('historial_alertas', 0)} | "
             f"Duplicados evitados: {evidencia.get('alertas_duplicadas_evitadas', 0)}\n"
             f"{', '.join(consultas[:5]) or 'Sin consultas registradas'}"
         )
