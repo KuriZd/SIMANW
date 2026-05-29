@@ -59,6 +59,7 @@ class SIMANWDesktopApp(ctk.CTk):
         self.total_noticias = 0
         self.simanw_service = SIMANWAppService()
         self.resultado_actual: ResultadoAnalisis | None = None
+        self.load_form_state: dict = {}
 
         self.noticias: list[dict] = []
         self.corpus_procesado: list[dict] = []
@@ -91,6 +92,8 @@ class SIMANWDesktopApp(ctk.CTk):
 
     def show_section(self, section_id: str) -> None:
         if self.current_content is not None:
+            if isinstance(self.current_content, SeccionCargar):
+                self.load_form_state = self.current_content.get_form_state()
             self.current_content.destroy()
 
         titulo, desc = _SECTION_META.get(section_id, ("Module", "Not available."))

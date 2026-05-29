@@ -31,18 +31,22 @@ class SeccionCargar(ctk.CTkFrame):
         self.service         = SIMANWAppService()
         self.fuentes_service = FuentesService()
 
-        self.modo_var        = ctk.StringVar(value=_MODO_DEMO)
+        estado_form = getattr(root_app, "load_form_state", {}) or {}
+
+        self.modo_var        = ctk.StringVar(value=estado_form.get("modo", _MODO_DEMO))
         self.fuente_predef_var = ctk.StringVar()
-        self.tipo_custom_var = ctk.StringVar(value="RSS")
-        self.url_var         = ctk.StringVar()
-        self.selector_articulos_var = ctk.StringVar(value="article")
-        self.selector_siguiente_var = ctk.StringVar(value="a[rel='next'], a.next-page, .next a")
-        self.selector_titulo_var = ctk.StringVar()
-        self.selector_resumen_var = ctk.StringVar()
-        self.selector_url_var = ctk.StringVar()
-        self.max_paginas_var = ctk.StringVar(value="5")
-        self.delay_var = ctk.StringVar(value="3")
-        self.min_noticias_var = ctk.StringVar(value="20")
+        self.tipo_custom_var = ctk.StringVar(value=estado_form.get("tipo_custom", "RSS"))
+        self.url_var         = ctk.StringVar(value=estado_form.get("url", ""))
+        self.selector_articulos_var = ctk.StringVar(value=estado_form.get("selector_articulos", "article"))
+        self.selector_siguiente_var = ctk.StringVar(
+            value=estado_form.get("selector_siguiente", "a[rel='next'], a.next-page, .next a")
+        )
+        self.selector_titulo_var = ctk.StringVar(value=estado_form.get("selector_titulo", ""))
+        self.selector_resumen_var = ctk.StringVar(value=estado_form.get("selector_resumen", ""))
+        self.selector_url_var = ctk.StringVar(value=estado_form.get("selector_url", ""))
+        self.max_paginas_var = ctk.StringVar(value=estado_form.get("max_paginas", "5"))
+        self.delay_var = ctk.StringVar(value=estado_form.get("delay", "3"))
+        self.min_noticias_var = ctk.StringVar(value=estado_form.get("min_noticias", "20"))
 
         self._step_icon_labels: list[ctk.CTkLabel] = []
         self._step_text_labels: list[ctk.CTkLabel] = []
@@ -101,7 +105,8 @@ class SeccionCargar(ctk.CTkFrame):
         # selector fuente predefinida (visible solo en modo PREDEF)
         nombres = self.fuentes_service.listar_nombres_fuentes()
         if nombres:
-            self.fuente_predef_var.set(nombres[0])
+            fuente_predef = estado_form.get("fuente_predef", nombres[0])
+            self.fuente_predef_var.set(fuente_predef if fuente_predef in nombres else nombres[0])
         self.selector_predef = ctk.CTkOptionMenu(
             card,
             values=nombres or ["Sin fuentes activas"],
@@ -240,6 +245,7 @@ class SeccionCargar(ctk.CTkFrame):
     # ═══════════════════════════════════════════════════════════════════════════
 
     def _analizar(self) -> None:
+        self._guardar_estado_formulario()
         source, url = self._resolver_fuente()
         try:
             paginado_config = self._paginado_config() if source == "paginado" else None
@@ -280,6 +286,7 @@ class SeccionCargar(ctk.CTkFrame):
         self.root_app.set_estado(mensaje, "loading")
 
     def _on_resultado(self, resultado: ResultadoAnalisis) -> None:
+        self._guardar_estado_formulario()
         if self._step_index > 0:
             last = min(self._step_index - 1, len(_STEPS) - 1)
             self._step_icon_labels[last].configure(text=_ICON_OK, text_color=THEME["success"])
@@ -300,6 +307,7 @@ class SeccionCargar(ctk.CTkFrame):
         self.root_app.show_section("dashboard")
 
     def _on_error(self, mensaje: str) -> None:
+        self._guardar_estado_formulario()
         if self._step_index > 0:
             idx = min(self._step_index - 1, len(_STEPS) - 1)
             self._step_icon_labels[idx].configure(text=_ICON_ERROR, text_color=THEME["error"])
@@ -330,6 +338,25 @@ class SeccionCargar(ctk.CTkFrame):
         source = "rss" if tipo == "RSS" else "paginado"
         return source, url
 
+    def get_form_state(self) -> dict:
+        return {
+            "modo": self.modo_var.get(),
+            "fuente_predef": self.fuente_predef_var.get(),
+            "tipo_custom": self.tipo_custom_var.get(),
+            "url": self.url_var.get(),
+            "selector_articulos": self.selector_articulos_var.get(),
+            "selector_siguiente": self.selector_siguiente_var.get(),
+            "selector_titulo": self.selector_titulo_var.get(),
+            "selector_resumen": self.selector_resumen_var.get(),
+            "selector_url": self.selector_url_var.get(),
+            "max_paginas": self.max_paginas_var.get(),
+            "delay": self.delay_var.get(),
+            "min_noticias": self.min_noticias_var.get(),
+        }
+
+    def _guardar_estado_formulario(self) -> None:
+        self.root_app.load_form_state = self.get_form_state()
+
     def _paginado_config(self) -> dict:
         url = self.url_var.get().strip()
         if not url:
@@ -355,6 +382,7 @@ class SeccionCargar(ctk.CTkFrame):
         }
 
     def _actualizar_modo_entrada(self) -> None:
+        self._guardar_estado_formulario()
         modo = self.modo_var.get()
         predef_state  = "normal" if modo == _MODO_PREDEF  else "disabled"
         custom_state  = "normal" if modo == _MODO_CUSTOM  else "disabled"
