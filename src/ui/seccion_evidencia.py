@@ -145,6 +145,7 @@ def _metricas_texto(data: dict) -> str:
         "bigramas",
         "trigramas",
         "riqueza_promedio",
+        "nube_generada",
         "total_mensajes",
         "tono",
         "sentimiento_promedio",

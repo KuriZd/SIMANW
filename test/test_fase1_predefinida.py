@@ -76,6 +76,22 @@ def test_ejecutar_fuente_predefinida_respeta_limite_noticias(rss_mock):
     assert len(noticias) <= fuente["limite_noticias"]
 
 
+def test_ejecutar_fuente_predefinida_acepta_limite_configurable():
+    rss = MagicMock()
+    rss.extraer.return_value = [
+        {**_NOTICIA_MUESTRA, "titulo": f"Noticia {idx}", "url": f"https://example.test/{idx}"}
+        for idx in range(5)
+    ]
+    rss.errores = []
+
+    with patch("src.fase1_service.RastreadorRSS", return_value=rss) as cls:
+        service = Fase1Service()
+        noticias = service.ejecutar_fuente_predefinida("aristegui_noticias", limite_noticias=2)
+
+    assert len(noticias) == 2
+    assert cls.call_args.kwargs["max_noticias"] == 2
+
+
 def test_rss_predefinido_no_usa_id_de_fuente_como_categoria(rss_mock):
     with patch("src.fase1_service.RastreadorRSS", return_value=rss_mock) as cls:
         service = Fase1Service()

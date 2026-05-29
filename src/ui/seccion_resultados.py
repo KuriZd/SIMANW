@@ -1,6 +1,7 @@
 """Sección 'Resultados NLP' — corpus procesado con estadísticas y detalle."""
 from __future__ import annotations
 
+from pathlib import Path
 from tkinter import messagebox, ttk
 
 import customtkinter as ctk
@@ -72,11 +73,9 @@ class SeccionResultados(ctk.CTkFrame):
         left.grid(row=0, column=0, sticky="nsew", padx=(18, 8), pady=12)
         left.grid_columnconfigure(0, weight=1)
 
-        right = ctk.CTkFrame(self, fg_color=THEME["bg_base"], corner_radius=0)
+        right = ctk.CTkScrollableFrame(self, fg_color=THEME["bg_base"], corner_radius=0)
         right.grid(row=0, column=1, sticky="nsew", padx=(8, 18), pady=12)
         right.grid_columnconfigure(0, weight=1)
-        right.grid_rowconfigure(0, weight=3)
-        right.grid_rowconfigure(1, weight=2)
 
         self._build_stats_card(left, stats).grid(row=0, column=0, sticky="ew", pady=(0, 10))
         self._build_auto_analysis_card(left).grid(row=1, column=0, sticky="ew", pady=(0, 10))
@@ -86,8 +85,9 @@ class SeccionResultados(ctk.CTkFrame):
         self._build_similarity_card(left).grid(row=5, column=0, sticky="ew", pady=(0, 10))
         self._build_export_card(left).grid(row=6, column=0, sticky="ew")
 
-        self._build_tabla_card(right).grid(row=0, column=0, sticky="nsew", pady=(0, 10))
-        self._build_detalle_card(right).grid(row=1, column=0, sticky="nsew")
+        self._build_tabla_card(right).grid(row=0, column=0, sticky="ew", pady=(0, 12))
+        self._build_detalle_card(right).grid(row=1, column=0, sticky="ew", pady=(0, 12))
+        self._build_ac2_visual_card(right).grid(row=2, column=0, sticky="ew")
 
         self._poblar_tabla()
 
@@ -301,6 +301,8 @@ class SeccionResultados(ctk.CTkFrame):
 
     def _build_tabla_card(self, master) -> ctk.CTkFrame:
         card = self._card(master)
+        card.configure(height=300)
+        card.grid_propagate(False)
         card.grid_rowconfigure(1, weight=1)
         ctk.CTkLabel(
             card, text="Corpus procesado", font=FONT_H2, text_color=THEME["text_1"]
@@ -330,6 +332,8 @@ class SeccionResultados(ctk.CTkFrame):
 
     def _build_detalle_card(self, master) -> ctk.CTkFrame:
         card = self._card(master)
+        card.configure(height=360)
+        card.grid_propagate(False)
         card.grid_rowconfigure(3, weight=1)
 
         self._det_titulo = ctk.CTkLabel(
@@ -357,6 +361,79 @@ class SeccionResultados(ctk.CTkFrame):
     # ═══════════════════════════════════════════════════════════════════════════
     # Acciones
     # ═══════════════════════════════════════════════════════════════════════════
+
+    def _build_ac2_visual_card(self, master) -> ctk.CTkFrame:
+        card = self._card(master)
+        card.configure(height=310)
+        card.grid_propagate(False)
+        card.grid_columnconfigure(0, weight=1)
+        card.grid_columnconfigure(1, weight=1)
+        card.grid_rowconfigure(1, weight=1)
+        ctk.CTkLabel(
+            card,
+            text="AC-2: nube de palabras y estadisticas de discurso",
+            font=FONT_H2,
+            text_color=THEME["text_1"],
+        ).grid(row=0, column=0, columnspan=2, sticky="w", padx=CARD_PADDING, pady=(CARD_PADDING, 8))
+
+        textos = self._analisis_discurso.get("textos_analizados", [])
+        comparativa = self._analisis_discurso.get("comparativa", [])
+        primer = textos[0] if textos else {}
+        evidencia = {}
+        result = getattr(self.root_app, "resultado_actual", None)
+        if result:
+            evidencia = result.evidencias_ac.get("AC-2", {})
+
+        nube_path = evidencia.get("archivo_nube") or getattr(self.root_app, "rutas_exportacion", {}).get("nube_ac2_png")
+        imagen_mostrada = self._insertar_nube_ac2(card, nube_path)
+        if not imagen_mostrada:
+            ctk.CTkLabel(
+                card,
+                text="Nube pendiente: ejecuta Load / Analyze News o revisa que wordcloud este instalado.",
+                font=FONT_META,
+                text_color=THEME["text_2"],
+                justify="left",
+                wraplength=360,
+            ).grid(row=1, column=0, sticky="nsew", padx=CARD_PADDING, pady=(0, CARD_PADDING))
+
+        resumen = (
+            f"Textos: {len(textos)}\n"
+            f"Bigramas: {_top_ngramas(primer.get('top_bigramas', [])) or '-'}\n"
+            f"Trigramas: {_top_ngramas(primer.get('top_trigramas', [])) or '-'}\n"
+            f"Riqueza por seccion: {_secciones_texto(primer.get('riqueza_por_seccion', []))}\n"
+            f"Entidades: {_entidades_texto(primer.get('posibles_entidades', []))}\n"
+            f"Comparativa: {_comparativa_texto(comparativa)}"
+        )
+        ctk.CTkLabel(
+            card,
+            text=resumen,
+            font=FONT_BODY,
+            text_color=THEME["text_1"],
+            justify="left",
+            anchor="nw",
+            wraplength=430,
+        ).grid(row=1, column=1, sticky="nsew", padx=(0, CARD_PADDING), pady=(0, CARD_PADDING))
+        return card
+
+    def _insertar_nube_ac2(self, card, ruta: str | Path | None) -> bool:
+        if not ruta:
+            return False
+        path = Path(ruta)
+        if not path.exists():
+            return False
+        try:
+            from PIL import Image
+        except ImportError:
+            return False
+        try:
+            image = Image.open(path)
+            self._ac2_wordcloud_image = ctk.CTkImage(light_image=image, dark_image=image, size=(360, 180))
+            ctk.CTkLabel(card, text="", image=self._ac2_wordcloud_image).grid(
+                row=1, column=0, sticky="nsew", padx=CARD_PADDING, pady=(0, CARD_PADDING)
+            )
+            return True
+        except Exception:
+            return False
 
     def _poblar_tabla(self) -> None:
         for row in self.tabla.get_children():
@@ -492,6 +569,37 @@ def _top_ngramas(items: list) -> str:
         else:
             valores.append(str(ngrama))
     return ", ".join(valores)
+
+
+def _secciones_texto(valores: list) -> str:
+    if not valores:
+        return "-"
+    return " | ".join(f"S{idx + 1}: {float(valor):.3f}" for idx, valor in enumerate(valores[:4]))
+
+
+def _entidades_texto(items: list) -> str:
+    if not items:
+        return "-"
+    partes = []
+    for item in items[:5]:
+        if len(item) >= 3:
+            partes.append(f"{item[0]} ({item[1]}, {item[2]})")
+        elif len(item) >= 2:
+            partes.append(f"{item[0]} ({item[1]})")
+        else:
+            partes.append(str(item[0]))
+    return ", ".join(partes)
+
+
+def _comparativa_texto(items: list) -> str:
+    if not items:
+        return "-"
+    partes = []
+    for item in items[:3]:
+        partes.append(
+            f"{item.get('titulo', '-')}: riqueza {float(item.get('riqueza', 0.0)):.3f}"
+        )
+    return "; ".join(partes)
 
 
 def _similares_texto(similares: list[dict]) -> str:

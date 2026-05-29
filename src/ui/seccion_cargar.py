@@ -46,7 +46,9 @@ class SeccionCargar(ctk.CTkFrame):
         self.selector_url_var = ctk.StringVar(value=self._estado_form.get("selector_url", ""))
         self.max_paginas_var = ctk.StringVar(value=self._estado_form.get("max_paginas", "5"))
         self.delay_var = ctk.StringVar(value=self._estado_form.get("delay", "3"))
-        self.min_noticias_var = ctk.StringVar(value=self._estado_form.get("min_noticias", "20"))
+        self.min_noticias_var = ctk.StringVar(
+            value=self._estado_form.get("news_limit", self._estado_form.get("min_noticias", "20"))
+        )
 
         self._step_icon_labels: list[ctk.CTkLabel] = []
         self._step_text_labels: list[ctk.CTkLabel] = []
@@ -137,6 +139,25 @@ class SeccionCargar(ctk.CTkFrame):
         )
         self.selector_tipo_custom.grid(row=3, column=0, sticky="ew", padx=CARD_PADDING, pady=(0, 8))
 
+        self.limit_label = ctk.CTkLabel(
+            card,
+            text="News limit",
+            font=FONT_META,
+            text_color=THEME["text_1"],
+            anchor="w",
+        )
+        self.limit_label.grid(row=4, column=0, sticky="w", padx=CARD_PADDING, pady=(2, 2))
+        self.limit_entry = ctk.CTkEntry(
+            card,
+            textvariable=self.min_noticias_var,
+            placeholder_text="20",
+            fg_color=THEME["bg_input"],
+            border_color=THEME["border"],
+            text_color=THEME["text_1"],
+            placeholder_text_color=THEME["text_2"],
+        )
+        self.limit_entry.grid(row=5, column=0, sticky="ew", padx=CARD_PADDING, pady=(0, 8))
+
         self.url_label = ctk.CTkLabel(
             card,
             text="URL",
@@ -144,7 +165,7 @@ class SeccionCargar(ctk.CTkFrame):
             text_color=THEME["text_1"],
             anchor="w",
         )
-        self.url_label.grid(row=4, column=0, sticky="w", padx=CARD_PADDING, pady=(2, 2))
+        self.url_label.grid(row=6, column=0, sticky="w", padx=CARD_PADDING, pady=(2, 2))
 
         self.url_entry = ctk.CTkEntry(
             card,
@@ -155,7 +176,7 @@ class SeccionCargar(ctk.CTkFrame):
             text_color=THEME["text_1"],
             placeholder_text_color=THEME["text_2"],
         )
-        self.url_entry.grid(row=5, column=0, sticky="ew", padx=CARD_PADDING, pady=(0, 8))
+        self.url_entry.grid(row=7, column=0, sticky="ew", padx=CARD_PADDING, pady=(0, 8))
 
         self.paginado_fields: list[ctk.CTkEntry] = []
         self.paginado_labels: list[ctk.CTkLabel] = []
@@ -169,9 +190,8 @@ class SeccionCargar(ctk.CTkFrame):
                 ("URL selector", self.selector_url_var, "h2 a, h3 a"),
                 ("Max pages", self.max_paginas_var, "5"),
                 ("Delay seconds", self.delay_var, "3"),
-                ("Minimum news", self.min_noticias_var, "20"),
             ],
-            start=6,
+            start=8,
         ):
             lbl = ctk.CTkLabel(card, text=label, font=FONT_META, text_color=THEME["text_1"], anchor="w")
             lbl.grid(row=row * 2, column=0, sticky="w", padx=CARD_PADDING, pady=(0, 2))
@@ -248,7 +268,8 @@ class SeccionCargar(ctk.CTkFrame):
         self._guardar_estado_formulario()
         source, url = self._resolver_fuente()
         try:
-            paginado_config = self._paginado_config() if source == "paginado" else None
+            limite_noticias = self._limite_noticias()
+            paginado_config = self._paginado_config(limite_noticias) if source == "paginado" else None
         except ValueError as exc:
             messagebox.showerror("Configuracion de rastreo", str(exc))
             return
@@ -256,14 +277,19 @@ class SeccionCargar(ctk.CTkFrame):
         self._reset_pipeline()
         self.root_app.set_estado("Analizando noticias…", "loading")
         self.root_app.show_progress()
-        threading.Thread(target=self._analizar_bg, args=(source, url, paginado_config), daemon=True).start()
+        threading.Thread(
+            target=self._analizar_bg,
+            args=(source, url, paginado_config, limite_noticias),
+            daemon=True,
+        ).start()
 
-    def _analizar_bg(self, source: str, url: str, paginado_config: dict | None) -> None:
+    def _analizar_bg(self, source: str, url: str, paginado_config: dict | None, limite_noticias: int) -> None:
         try:
             resultado = self.service.analizar_noticias(
                 source,
                 url,
                 paginado_config=paginado_config,
+                limite_noticias=limite_noticias,
                 on_progreso=lambda msg: self.after(0, lambda m=msg: self._on_progreso(m)),
             )
             self.after(0, lambda r=resultado: self._on_resultado(r))
@@ -351,22 +377,28 @@ class SeccionCargar(ctk.CTkFrame):
             "selector_url": self.selector_url_var.get(),
             "max_paginas": self.max_paginas_var.get(),
             "delay": self.delay_var.get(),
+            "news_limit": self.min_noticias_var.get(),
             "min_noticias": self.min_noticias_var.get(),
         }
 
     def _guardar_estado_formulario(self) -> None:
         self.root_app.load_form_state = self.get_form_state()
 
-    def _paginado_config(self) -> dict:
+    def _limite_noticias(self) -> int:
+        try:
+            return max(int(self.min_noticias_var.get().strip() or "20"), 1)
+        except ValueError as exc:
+            raise ValueError("News limit debe ser un numero entero positivo.") from exc
+
+    def _paginado_config(self, limite_noticias: int) -> dict:
         url = self.url_var.get().strip()
         if not url:
             raise ValueError("Ingresa la URL inicial para rastreo web paginado.")
         try:
             delay = max(float(self.delay_var.get().strip() or "3"), 3.0)
             max_paginas = max(int(self.max_paginas_var.get().strip() or "5"), 1)
-            min_noticias = max(int(self.min_noticias_var.get().strip() or "20"), 1)
         except ValueError as exc:
-            raise ValueError("Max pages, delay seconds y minimum news deben ser numericos.") from exc
+            raise ValueError("Max pages y delay seconds deben ser numericos.") from exc
 
         return {
             "url_base": url,
@@ -377,7 +409,8 @@ class SeccionCargar(ctk.CTkFrame):
             "selector_url": self.selector_url_var.get().strip(),
             "max_paginas": max_paginas,
             "delay": delay,
-            "minimo_noticias": min_noticias,
+            "minimo_noticias": limite_noticias,
+            "max_noticias": limite_noticias,
             "respetar_robots": True,
         }
 
@@ -391,6 +424,8 @@ class SeccionCargar(ctk.CTkFrame):
 
         self.selector_predef.configure(state=predef_state)
         self.selector_tipo_custom.configure(state=custom_state)
+        self.limit_label.configure(text_color=THEME["text_1"])
+        self.limit_entry.configure(state="normal")
         self.url_label.configure(text_color=THEME["text_1"] if modo == _MODO_CUSTOM else THEME["text_2"])
         self.url_entry.configure(state=url_state)
 
@@ -433,5 +468,6 @@ class SeccionCargar(ctk.CTkFrame):
             self.selector_predef.configure(state="disabled")
             self.selector_tipo_custom.configure(state="disabled")
             self.url_entry.configure(state="disabled")
+            self.limit_entry.configure(state="disabled")
         else:
             self._actualizar_modo_entrada()

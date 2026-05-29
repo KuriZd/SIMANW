@@ -39,20 +39,21 @@ class Fase1Service:
         self.errores: list[str] = []
         self.ultima_evidencia: dict | None = None
 
-    def ejecutar(self, fuente: FuenteFase1, url: str = "") -> ResultadoFase1:
+    def ejecutar(self, fuente: FuenteFase1, url: str = "", limite_noticias: int | None = None) -> ResultadoFase1:
         """Ejecuta la fuente indicada y deja las noticias normalizadas en memoria."""
         fuente = self._normalizar_fuente(fuente)
         self.errores = []
         self.ultima_evidencia = None
+        limite = max(int(limite_noticias or 0), 1) if limite_noticias else None
 
         if fuente == "demo":
-            noticias = self._extraer_demo()
+            noticias = self._extraer_demo(limite_noticias=limite)
         elif fuente == "rss":
-            noticias = self._extraer_rss(url)
+            noticias = self._extraer_rss(url, limite_noticias=limite)
         elif fuente == "paginado":
             noticias = self._rastrear_paginado(url)
         elif fuente == "predefinida":
-            noticias = self.ejecutar_fuente_predefinida(url)
+            noticias = self.ejecutar_fuente_predefinida(url, limite_noticias=limite)
         else:
             raise ValueError(f"Fuente no soportada: {fuente}")
 
@@ -88,7 +89,7 @@ class Fase1Service:
             evidencia=self.ultima_evidencia,
         )
 
-    def ejecutar_fuente_predefinida(self, fuente_id: str) -> list[dict]:
+    def ejecutar_fuente_predefinida(self, fuente_id: str, limite_noticias: int | None = None) -> list[dict]:
         fuente = self.fuentes_service.obtener_fuente(fuente_id)
         valida, errores = self.fuentes_service.validar_fuente(fuente)
         if not valida:
@@ -97,7 +98,7 @@ class Fase1Service:
         self.errores = []
         noticias_raw: list[dict] = []
         tipo = fuente["tipo"]
-        limite_total = int(fuente.get("limite_noticias", 20))
+        limite_total = int(limite_noticias or fuente.get("limite_noticias", 20))
         urls = list(fuente.get("urls", []))
 
         if tipo == "rss":
@@ -145,16 +146,16 @@ class Fase1Service:
         csv_path = self.exportar_csv(self.noticias)
         return json_path, csv_path
 
-    def _extraer_demo(self) -> list[dict]:
+    def _extraer_demo(self, limite_noticias: int | None = None) -> list[dict]:
         extractor = ExtractorNoticias()
         noticias = extractor.extraer_de_html(html_portal_noticias, url_base="https://portal-noticias.com")
         self.errores.extend(extractor.errores)
-        return noticias
+        return noticias[:limite_noticias] if limite_noticias else noticias
 
-    def _extraer_rss(self, url: str) -> list[dict]:
+    def _extraer_rss(self, url: str, limite_noticias: int | None = None) -> list[dict]:
         if not url.strip():
             raise ValueError("La fuente RSS requiere una URL.")
-        rastreador = RastreadorRSS(url.strip(), max_noticias=25)
+        rastreador = RastreadorRSS(url.strip(), max_noticias=limite_noticias or 25)
         noticias = rastreador.extraer()
         self.errores.extend(rastreador.errores)
         return noticias

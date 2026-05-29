@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 from src.exportador import guardar_json
 from src.alertas_consulta import ConsultaGuardada, SistemaAlertasConsulta, consultas_demo
-from src.analisis_discurso import AnalisisDiscurso
+from src.analisis_discurso import AnalisisDiscurso, generar_nube_palabras
 from src.analizador_hilo import AnalizadorHiloDiscusion, cargar_hilo_desde_json
 from src.control_calidad import ControlCalidadCorpus
 from src.fase1_service import Fase1Service
@@ -121,6 +121,7 @@ class SIMANWAppService:
         fuente_id: str | None = None,
         archivo: str | None = None,
         paginado_config: dict | None = None,
+        limite_noticias: int | None = None,
         on_progreso: Callable[[str], None] | None = None,
     ) -> SIMANWAppResult:
         errores: list[str] = []
@@ -152,6 +153,7 @@ class SIMANWAppService:
                 fuente_id=fuente_id,
                 archivo=archivo,
                 paginado_config=paginado_config,
+                limite_noticias=limite_noticias,
             )
             if not noticias:
                 detalle = "; ".join(self.fase1_service.errores) or "La fuente no devolvio articulos con los selectores configurados."
@@ -193,6 +195,10 @@ class SIMANWAppService:
                 if ruta_ac2:
                     rutas["analisis_ac2_json"] = ruta_ac2
                     archivos.append(ruta_ac2)
+                ruta_nube_ac2 = evidencia_ac2.get("archivo_nube")
+                if ruta_nube_ac2:
+                    rutas["nube_ac2_png"] = ruta_nube_ac2
+                    archivos.append(ruta_nube_ac2)
             evidencia_ac4 = self._generar_evidencia_ac4(corpus)
             if evidencia_ac4:
                 evidencias_ac["AC-4"] = evidencia_ac4
@@ -642,6 +648,13 @@ class SIMANWAppService:
         analisis_textos = [analizador.analizar(item["texto"], item["titulo"]) for item in textos[:5]]
         comparativa = analizador.comparar_textos(analisis_textos)
         ruta = "data/analisis_ac2.json"
+        ruta_nube = "data/nube_ac2.png"
+        tokens_nube = [
+            token
+            for analisis in analisis_textos
+            for token in analisis.get("_tokens_filtrados", [])
+        ]
+        nube_generada = generar_nube_palabras(tokens_nube, ruta_nube) if tokens_nube else False
         AnalisisDiscurso.guardar_json(ruta, analisis_textos, comparativa)
         total_unigramas = sum(len(a.get("top_unigramas", [])) for a in analisis_textos)
         total_bigramas = sum(len(a.get("top_bigramas", [])) for a in analisis_textos)
@@ -659,6 +672,8 @@ class SIMANWAppService:
                 4,
             ),
             "archivo_json": ruta,
+            "archivo_nube": ruta_nube if nube_generada else "",
+            "nube_generada": nube_generada,
         }
 
     def _generar_evidencia_ac4(self, corpus: list[dict]) -> dict:
@@ -839,7 +854,9 @@ class SIMANWAppService:
         fuente_id: str | None = None,
         archivo: str | None = None,
         paginado_config: dict | None = None,
+        limite_noticias: int | None = None,
     ) -> list[dict]:
+        limite = max(int(limite_noticias or 0), 1) if limite_noticias else None
         source_norm = (source or "demo").strip().lower()
         if source_norm in {"archivo", "file"}:
             ruta = Path(archivo or url or "")
@@ -849,16 +866,18 @@ class SIMANWAppService:
             if not isinstance(datos, list):
                 raise ValueError("El archivo debe contener una lista de noticias.")
             noticias = [Fase1Service._normalizar_noticia(n, idx) for idx, n in enumerate(datos, start=1)]
+            if limite:
+                noticias = noticias[:limite]
             self.fase1_service.noticias = noticias
             return noticias
         if source_norm in {"predefinida", "predefined"}:
-            return self.fase1_service.ejecutar_fuente_predefinida(fuente_id or url or "")
+            return self.fase1_service.ejecutar_fuente_predefinida(fuente_id or url or "", limite_noticias=limite)
         if source_norm == "paginado" and paginado_config:
             resultado = self.fase1_service.ejecutar_paginado_configurado(paginado_config)
             if resultado.errores:
                 self._eventos.append({"paso": "extraction", "estado": "warning", "errores": resultado.errores})
             return resultado.noticias
-        resultado = self.fase1_service.ejecutar(source_norm, url or "")
+        resultado = self.fase1_service.ejecutar(source_norm, url or "", limite_noticias=limite)
         if resultado.errores:
             self._eventos.append({"paso": "extraction", "estado": "warning", "errores": resultado.errores})
         return resultado.noticias
