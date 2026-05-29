@@ -16,14 +16,14 @@ class SidebarFrame(ctk.CTkFrame):
 
     def _build(self) -> None:
         ctk.CTkLabel(self, text="SIMANW", font=FONT_H1, text_color=THEME["text_1"]).grid(
-            row=0, column=0, sticky="w", padx=18, pady=(20, 2)
+            row=0, column=0, sticky="w", padx=14, pady=(20, 2)
         )
         ctk.CTkLabel(
             self,
             text="Monitor de Noticias Web",
             font=FONT_META,
             text_color=THEME["text_2"],
-        ).grid(row=1, column=0, sticky="w", padx=18, pady=(0, 22))
+        ).grid(row=1, column=0, sticky="w", padx=14, pady=(0, 22))
 
         for idx, (section_id, label, enabled) in enumerate(SECTIONS, start=2):
             button = ctk.CTkButton(
@@ -39,7 +39,7 @@ class SidebarFrame(ctk.CTkFrame):
                 state="normal" if enabled else "disabled",
                 command=lambda sid=section_id: self.on_select(sid),
             )
-            button.grid(row=idx, column=0, sticky="ew", padx=14, pady=4)
+            button.grid(row=idx, column=0, sticky="ew", padx=10, pady=4)
             if enabled:
                 self._buttons[section_id] = button
 

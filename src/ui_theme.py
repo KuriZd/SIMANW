@@ -22,7 +22,7 @@ FONT_STAT       = ("Segoe UI", 14, "bold")
 
 CARD_RADIUS        = 8
 CARD_PADDING       = 14
-SIDEBAR_WIDTH      = 252
+SIDEBAR_WIDTH      = 200
 STATUS_HEIGHT      = 38
 HEADER_HEIGHT      = 96
 TREEVIEW_ROW_HEIGHT = 36
