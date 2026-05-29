@@ -213,8 +213,14 @@ def _tab_corpus(noticias: list[dict]) -> None:
 
     # ── Sub-tab: corpus completo ──────────────────────────────────────────────
     with sub_corpus:
-        limite = st.slider("Noticias a analizar", min_value=5, max_value=min(50, len(noticias)),
-                           value=min(20, len(noticias)), step=5, key="slider_corpus")
+        _max_corpus = min(50, len(noticias))
+        _min_corpus = min(5, _max_corpus)
+        if _min_corpus < _max_corpus:
+            limite = st.slider("Noticias a analizar", min_value=_min_corpus, max_value=_max_corpus,
+                               value=min(20, _max_corpus), step=1, key="slider_corpus")
+        else:
+            limite = _max_corpus
+            st.caption(f"Analizando {limite} noticia(s) disponible(s).")
 
         if st.button("Analizar corpus completo", key="btn_corpus_total", type="primary"):
             resultados = []

@@ -91,6 +91,11 @@ def main() -> None:
     noticias_norm: list[dict] = []
     for n in noticias:
         item = dict(n)
+        item["titulo"] = item.get("titulo") or "Sin título"
+        item["cuerpo"] = (
+            item.get("cuerpo") or item.get("resumen") or item.get("texto_original") or ""
+        )
+        item["fecha"] = item.get("fecha") or "2000-01-01"
         item["sentimiento"] = item.get("sentimiento") or {"etiqueta": "neutral", "compound": 0.0}
         item["fuente"] = item.get("fuente") or item.get("url", "https://simanw.local")
         noticias_norm.append(item)

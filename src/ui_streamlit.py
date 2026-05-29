@@ -230,6 +230,7 @@ def inject_sidebar_styles() -> None:
 _NAV_PAGES: list[tuple[str, str, str]] = [
     ("📊", "Dashboard",                    "app.py"),
     ("F1", "Rastreo Web",                  "pages/AC01_Rastreo_Paginado.py"),
+    ("🧠", "Pipeline NLP",                 "pages/Fase2_Pipeline_NLP.py"),
     ("F2", "Análisis de Discurso",         "pages/AC02_Analisis_Discurso.py"),
     ("F3", "Selección de Modelo",          "pages/AC03_Seleccion_Modelo.py"),
     ("F4", "Hilo de Discusión",            "pages/AC04_Hilo_Discusion.py"),

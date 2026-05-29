@@ -17,11 +17,57 @@ from src.ui_streamlit import aplicar_estilo_global, encabezado  # noqa: E402
 st.set_page_config(page_title="SIMANW | AC-12: Trazabilidad", page_icon="📋", layout="wide")
 aplicar_estilo_global()
 
+# Artefactos del pipeline en orden, con la ruta de donde leer el conteo de documentos
+_ETAPAS_PIPELINE: list[tuple[str, Path, Path | None]] = [
+    ("F1 · Rastreo",        Path("data/noticias_extraidas.json"),           None),
+    ("F2 · NLP",            Path("data/processed/corpus_procesado.json"),   Path("data/noticias_extraidas.json")),
+    ("F2 · Corpus depurado",Path("data/processed/corpus_depurado.json"),    Path("data/processed/corpus_procesado.json")),
+    ("F3 · Clasificación",  Path("data/resultados_ac3.json"),               Path("data/processed/corpus_depurado.json")),
+    ("F3 · Calidad",        Path("outputs/reporte_calidad.json"),           Path("data/noticias_extraidas.json")),
+    ("F4 · Búsqueda",       Path("data/ac10_historial_alertas.json"),       Path("data/processed/corpus_procesado.json")),
+]
 
 
-@st.cache_resource
-def get_trazabilidad() -> TrazabilidadPipeline:
-    return trazabilidad_demo()
+def _contar_docs(ruta: Path) -> int:
+    """Lee un JSON y retorna len si es lista, o total_documentos si tiene esa clave."""
+    if not ruta.exists():
+        return 0
+    try:
+        datos = json.loads(ruta.read_text(encoding="utf-8"))
+        if isinstance(datos, list):
+            return len(datos)
+        if isinstance(datos, dict):
+            for clave in ("total_textos", "total_documentos", "total_extraidas"):
+                if clave in datos:
+                    return int(datos[clave])
+        return 0
+    except Exception:
+        return 0
+
+
+def _construir_trazabilidad_real() -> tuple[TrazabilidadPipeline, bool]:
+    """
+    Construye TrazabilidadPipeline leyendo los archivos reales del pipeline.
+    Retorna (traza, usando_demo).
+    """
+    fuente = Path("data/noticias_extraidas.json")
+    if not fuente.exists():
+        return trazabilidad_demo(), True
+
+    traza = TrazabilidadPipeline(str(fuente))
+    alguna_etapa = False
+    for etapa, artefacto, entrada_ruta in _ETAPAS_PIPELINE:
+        if not artefacto.exists():
+            continue
+        salida = _contar_docs(artefacto)
+        entrada = _contar_docs(entrada_ruta) if entrada_ruta else 0
+        traza.registrar_etapa(etapa, entrada, salida, str(artefacto))
+        alguna_etapa = True
+
+    if not alguna_etapa:
+        return trazabilidad_demo(), True
+
+    return traza, False
 
 
 def main() -> None:
@@ -31,7 +77,25 @@ def main() -> None:
         "Manifiestos de ejecución, logs estructurados JSONL y procedimiento para reproducir el pipeline.",
     )
 
-    traza = get_trazabilidad()
+    traza, usando_demo = _construir_trazabilidad_real()
+
+    if usando_demo:
+        st.warning(
+            "Mostrando trazabilidad de demostración. Ejecuta el pipeline desde "
+            "**F1 · Rastreo Web** para generar artefactos reales."
+        )
+    else:
+        etapas_reales = len(traza.eventos)
+        st.caption(f"Trazabilidad real — {etapas_reales} etapa(s) detectadas en disco.")
+
+    archivos_salida = {
+        "rastreo":          "data/noticias_extraidas.json",
+        "corpus_procesado": "data/processed/corpus_procesado.json",
+        "corpus_depurado":  "data/processed/corpus_depurado.json",
+        "clasificacion":    "data/resultados_ac3.json",
+        "reporte_calidad":  "outputs/reporte_calidad.json",
+        "grafo":            "data/simanw.ttl",
+    }
 
     tab1, tab2, tab3, tab4 = st.tabs(["Etapas del pipeline", "Manifiesto", "Log estructurado", "Reproducibilidad"])
 
@@ -51,7 +115,6 @@ def main() -> None:
             df_ev = pd.DataFrame(filas)
             st.dataframe(df_ev, use_container_width=True, hide_index=True)
 
-            # Diagrama de flujo de documentos
             fig = px.funnel(
                 df_ev, x="Docs salida", y="Etapa",
                 color_discrete_sequence=["#4F46E5"],
@@ -60,18 +123,27 @@ def main() -> None:
             fig.update_layout(margin=dict(l=0, r=0, t=20, b=0))
             st.plotly_chart(fig, use_container_width=True)
 
+            # Estado de artefactos en disco
+            st.subheader("Estado de artefactos en disco")
+            rows_arch = []
+            for etapa, artefacto, _ in _ETAPAS_PIPELINE:
+                existe = artefacto.exists()
+                tamano = f"{artefacto.stat().st_size / 1024:.1f} KB" if existe else "—"
+                rows_arch.append({
+                    "Etapa": etapa,
+                    "Artefacto": str(artefacto),
+                    "Existe": "✅" if existe else "❌",
+                    "Tamaño": tamano,
+                })
+            st.dataframe(pd.DataFrame(rows_arch), use_container_width=True, hide_index=True)
+
     with tab2:
         st.subheader("Manifiesto de ejecución")
-        archivos_salida = {
-            "rastreo": "data/noticias_extraidas.json",
-            "reporte": "data/reporte_final.md",
-            "grafo": "data/simanw.ttl",
-        }
         if st.button("Generar y guardar manifiesto", type="primary"):
             ruta = traza.guardar_manifiesto("data/ac12_manifiesto.json", archivos_salida)
             st.success(f"Manifiesto guardado en `{ruta}`")
 
-        ruta_manifest = Path("data") / "ac12_manifiesto.json"
+        ruta_manifest = Path("data/ac12_manifiesto.json")
         if ruta_manifest.exists():
             manifest_data = json.loads(ruta_manifest.read_text(encoding="utf-8"))
             col1, col2 = st.columns(2)
@@ -95,7 +167,7 @@ def main() -> None:
             ruta_log = traza.guardar_log_jsonl("data/ac12_log.jsonl")
             st.success(f"Log guardado en `{ruta_log}`")
 
-        ruta_log = Path("data") / "ac12_log.jsonl"
+        ruta_log = Path("data/ac12_log.jsonl")
         if ruta_log.exists():
             lineas = ruta_log.read_text(encoding="utf-8").strip().splitlines()
             st.metric("Eventos en el log", len(lineas))
@@ -125,4 +197,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

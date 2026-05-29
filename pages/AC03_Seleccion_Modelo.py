@@ -282,8 +282,14 @@ def _tab_prediccion(noticias: list[dict]) -> None:
             st.info("Sin corpus disponible.")
             return
 
-        limite = st.slider("Noticias a clasificar", 5, min(50, len(noticias)),
-                           min(20, len(noticias)), step=5, key="sl_pred_corpus")
+        _max_pred = min(50, len(noticias))
+        _min_pred = min(5, _max_pred)
+        if _min_pred < _max_pred:
+            limite = st.slider("Noticias a clasificar", _min_pred, _max_pred,
+                               min(20, _max_pred), step=1, key="sl_pred_corpus")
+        else:
+            limite = _max_pred
+            st.caption(f"Clasificando {limite} noticia(s) disponible(s).")
 
         if st.button("Clasificar noticias del corpus", key="btn_pred_corpus", type="primary"):
             selector = _get_selector()

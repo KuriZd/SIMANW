@@ -102,7 +102,19 @@ def _vista_rastreo_simulado() -> None:
 
         ejecutar = st.form_submit_button("Ejecutar rastreo simulado", type="primary", use_container_width=True)
 
-    if not ejecutar:
+    if ejecutar:
+        with st.spinner("Rastreando paginas simuladas..."):
+            rastreador = _crear_rastreador(url_base, noticias_por_pagina, total_paginas)
+            rastreador.respetar_robots = respetar_robots
+            resultados = rastreador.rastrear(minimo_noticias=int(min_noticias))
+        st.session_state["ac1_sim_resultados"] = resultados
+        st.session_state["ac1_sim_paginas"] = rastreador.paginas_visitadas
+        st.session_state["ac1_sim_meta"] = {
+            "min_noticias": int(min_noticias),
+            "respetar_robots": respetar_robots,
+        }
+        st.success("Rastreo completado.")
+    elif "ac1_sim_resultados" not in st.session_state:
         st.markdown(
             """
 <div class="simanw-callout">
@@ -113,18 +125,15 @@ La demo no hace peticiones externas: genera HTML local paginado para demostrar e
         )
         return
 
-    with st.spinner("Rastreando paginas simuladas..."):
-        rastreador = _crear_rastreador(url_base, noticias_por_pagina, total_paginas)
-        rastreador.respetar_robots = respetar_robots
-        resultados = rastreador.rastrear(minimo_noticias=int(min_noticias))
-
-    st.success("Rastreo completado.")
+    resultados = st.session_state["ac1_sim_resultados"]
+    paginas_visitadas = st.session_state["ac1_sim_paginas"]
+    meta = st.session_state["ac1_sim_meta"]
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Paginas visitadas", len(rastreador.paginas_visitadas))
+    c1.metric("Paginas visitadas", len(paginas_visitadas))
     c2.metric("Noticias extraidas", len(resultados))
-    c3.metric("Objetivo minimo", int(min_noticias))
-    c4.metric("Robots.txt", "Activo" if respetar_robots else "Simulado")
+    c3.metric("Objetivo minimo", meta["min_noticias"])
+    c4.metric("Robots.txt", "Activo" if meta["respetar_robots"] else "Simulado")
 
     tab_resultados, tab_paginas, tab_exportacion = st.tabs(
         ["Noticias extraidas", "Paginas visitadas", "Exportacion"]
@@ -137,7 +146,7 @@ La demo no hace peticiones externas: genera HTML local paginado para demostrar e
             st.info("No se extrajeron noticias con esta configuracion.")
 
     with tab_paginas:
-        st.code("\n".join(rastreador.paginas_visitadas), language="text")
+        st.code("\n".join(paginas_visitadas), language="text")
 
     with tab_exportacion:
         if resultados:
@@ -197,7 +206,9 @@ Recomendacion: guarda solo metadatos, resumen y URL. Para texto completo, respet
         unsafe_allow_html=True,
     )
 
-    if not st.button("Descargar noticias reales", type="primary", use_container_width=True):
+    descargar = st.button("Descargar noticias reales", type="primary", use_container_width=True)
+
+    if not descargar and "ac1_rss_noticias" not in st.session_state:
         st.dataframe(
             pd.DataFrame(
                 [{"Fuente": nombre, "RSS": url} for nombre, url in FEEDS_DEMO.items()]
@@ -207,26 +218,35 @@ Recomendacion: guarda solo metadatos, resumen y URL. Para texto completo, respet
         )
         return
 
-    feeds = {nombre: FEEDS_DEMO[nombre] for nombre in seleccionadas}
-    if feed_manual.strip():
-        feeds["Feed manual"] = feed_manual.strip()
+    if descargar:
+        feeds = {nombre: FEEDS_DEMO[nombre] for nombre in seleccionadas}
+        if feed_manual.strip():
+            feeds["Feed manual"] = feed_manual.strip()
 
-    noticias: list[dict] = []
-    resumenes: list[dict] = []
-    with st.spinner("Consultando feeds RSS..."):
-        for nombre, url in feeds.items():
-            rastreador = RastreadorRSS(
-                url,
-                categoria_default=categoria_default,
-                max_noticias=max_por_fuente,
-            )
-            extraidas = rastreador.extraer()
-            for noticia in extraidas:
-                noticia["fuente_nombre"] = nombre
-            noticias.extend(extraidas)
-            resumen = rastreador.resumen()
-            resumen["nombre"] = nombre
-            resumenes.append(resumen)
+        noticias: list[dict] = []
+        resumenes: list[dict] = []
+        with st.spinner("Consultando feeds RSS..."):
+            for nombre, url in feeds.items():
+                rastreador = RastreadorRSS(
+                    url,
+                    categoria_default=categoria_default,
+                    max_noticias=max_por_fuente,
+                )
+                extraidas = rastreador.extraer()
+                for noticia in extraidas:
+                    noticia["fuente_nombre"] = nombre
+                noticias.extend(extraidas)
+                resumen = rastreador.resumen()
+                resumen["nombre"] = nombre
+                resumenes.append(resumen)
+
+        st.session_state["ac1_rss_noticias"] = noticias
+        st.session_state["ac1_rss_resumenes"] = resumenes
+        st.session_state["ac1_rss_feeds"] = feeds
+
+    noticias = st.session_state["ac1_rss_noticias"]
+    resumenes = st.session_state["ac1_rss_resumenes"]
+    feeds = st.session_state["ac1_rss_feeds"]
 
     c1, c2, c3 = st.columns(3)
     c1.metric("Fuentes consultadas", len(feeds))
