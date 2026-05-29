@@ -44,6 +44,20 @@ def _tabla_resultados(resultados: list[dict]) -> pd.DataFrame:
     return df[columnas] if columnas else df
 
 
+def _guardar_corpus(noticias: list[dict]) -> None:
+    """Escribe noticias en data/noticias_extraidas.json y las pone en session_state."""
+    ruta = Path("data/noticias_extraidas.json")
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    ruta.write_text(
+        json.dumps(noticias, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    st.session_state["noticias"] = noticias
+    st.success(
+        f"{len(noticias)} noticias guardadas en `{ruta}`. "
+        "Ya están disponibles en F2, F3 y el Dashboard."
+    )
+
+
 def main() -> None:
     encabezado(
         "Fase 1 | Rastreador Web de Noticias",
@@ -144,6 +158,10 @@ La demo no hace peticiones externas: genera HTML local paginado para demostrar e
                 mime="text/csv",
                 use_container_width=True,
             )
+            st.divider()
+            if st.button("Guardar en corpus del sistema", type="primary",
+                         use_container_width=True, key="btn_guardar_sim"):
+                _guardar_corpus(resultados)
         st.caption("Estos archivos alimentan el control de calidad, NLP, clasificacion y busqueda.")
 
 
@@ -254,6 +272,10 @@ Recomendacion: guarda solo metadatos, resumen y URL. Para texto completo, respet
             mime="text/csv",
             use_container_width=True,
         )
+        st.divider()
+        if st.button("Guardar en corpus del sistema", type="primary",
+                     use_container_width=True, key="btn_guardar_rss"):
+            _guardar_corpus(noticias)
     else:
         st.warning("No se obtuvieron noticias. Revisa la conectividad o prueba otra fuente RSS.")
 

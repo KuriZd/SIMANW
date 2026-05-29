@@ -22,6 +22,21 @@ st.set_page_config(page_title="SIMANW | AC-10: Alertas por Consulta", page_icon=
 aplicar_estilo_global()
 
 
+@st.cache_data(show_spinner=False)
+def _cargar_noticias_archivo() -> list[dict]:
+    ruta = Path("data/noticias_extraidas.json")
+    if not ruta.exists() or ruta.stat().st_size < 10:
+        return []
+    try:
+        return json.loads(ruta.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+
+
+def _noticias_disponibles() -> list[dict]:
+    sesion = st.session_state.get("noticias", [])
+    return sesion if sesion else _cargar_noticias_archivo()
+
 
 def main() -> None:
     encabezado(
@@ -56,21 +71,41 @@ def main() -> None:
             st.rerun()
 
     with tab2:
-        noticias_nuevas = noticias_nuevas_demo()
+        fuente_radio = st.radio(
+            "Fuente de noticias nuevas",
+            ["Demo", "Corpus real"],
+            horizontal=True,
+        )
+
+        if fuente_radio == "Corpus real":
+            corpus = _noticias_disponibles()
+            if corpus:
+                noticias_nuevas = corpus[:20]
+                st.caption(f"Corpus real cargado: mostrando {len(noticias_nuevas)} de {len(corpus)} noticias.")
+            else:
+                st.info("No hay corpus real disponible. Usando datos de demo.")
+                noticias_nuevas = noticias_nuevas_demo()
+        else:
+            noticias_nuevas = noticias_nuevas_demo()
+
+        st.session_state["ac10_noticias_fuente"] = noticias_nuevas
+
         st.subheader(f"Noticias nuevas para procesar — {len(noticias_nuevas)}")
         df_n = pd.DataFrame([{
-            "Título": n.get("titulo",""),
-            "Cuerpo (resumen)": n.get("cuerpo","")[:80] + "…",
-            "URL": n.get("url",""),
+            "Título": n.get("titulo", ""),
+            "Cuerpo (resumen)": n.get("cuerpo", "")[:80] + "…",
+            "URL": n.get("url", ""),
         } for n in noticias_nuevas])
         st.dataframe(df_n, use_container_width=True, hide_index=True)
 
     with tab3:
         st.subheader("Simulación de procesamiento de alertas")
 
+        noticias_para_procesar = st.session_state.get("ac10_noticias_fuente") or noticias_nuevas_demo()
+
         if st.button("▶ Procesar noticias nuevas (primera vez)", type="primary"):
             sistema = SistemaAlertasConsulta(consultas_demo())
-            alertas = sistema.procesar_noticias_nuevas(noticias_nuevas_demo(), "2026-05-25T12:00:00Z")
+            alertas = sistema.procesar_noticias_nuevas(noticias_para_procesar, "2026-05-25T12:00:00Z")
             sistema.guardar_consultas("data/ac10_consultas_guardadas.json")
             sistema.guardar_historial("data/ac10_historial_alertas.json")
             st.session_state["alertas_resultado"] = alertas
@@ -78,8 +113,8 @@ def main() -> None:
 
         if st.button("🔁 Reprocesar las mismas noticias (deduplicación)"):
             sistema = SistemaAlertasConsulta(consultas_demo())
-            sistema.procesar_noticias_nuevas(noticias_nuevas_demo(), "2026-05-25T12:00:00Z")
-            repetidas = sistema.procesar_noticias_nuevas(noticias_nuevas_demo(), "2026-05-25T12:05:00Z")
+            sistema.procesar_noticias_nuevas(noticias_para_procesar, "2026-05-25T12:00:00Z")
+            repetidas = sistema.procesar_noticias_nuevas(noticias_para_procesar, "2026-05-25T12:05:00Z")
             st.session_state["alertas_repetidas"] = repetidas
 
         if "alertas_resultado" in st.session_state:
@@ -92,11 +127,11 @@ def main() -> None:
 
             if alertas:
                 df_a = pd.DataFrame([{
-                    "Consulta": a.get("consulta",""),
-                    "Expresión": a.get("expresion",""),
-                    "Título noticia": a.get("titulo",""),
-                    "URL": a.get("url",""),
-                    "Marca de tiempo": a.get("marca_tiempo",""),
+                    "Consulta": a.get("consulta", ""),
+                    "Expresión": a.get("expresion", ""),
+                    "Título noticia": a.get("titulo", ""),
+                    "URL": a.get("url", ""),
+                    "Marca de tiempo": a.get("marca_tiempo", ""),
                 } for a in alertas])
                 st.dataframe(df_a, use_container_width=True, hide_index=True)
 
@@ -124,4 +159,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

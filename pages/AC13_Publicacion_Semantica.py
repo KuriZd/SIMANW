@@ -19,6 +19,7 @@ from src.knowledge_graph import (
 from src.tendencias_temporales import NOTICIAS_AC9_DEMO
 from src.ui_streamlit import aplicar_estilo_global, encabezado  # noqa: E402
 
+# Fallback constant — used when no real corpus is available
 NOTICIAS_KG = []
 for _i, _n in enumerate(NOTICIAS_AC9_DEMO[:6], start=1):
     NOTICIAS_KG.append({
@@ -36,11 +37,45 @@ st.set_page_config(page_title="SIMANW | AC-13: Publicación Semántica", page_ic
 aplicar_estilo_global()
 
 
+@st.cache_data(show_spinner=False)
+def _cargar_noticias_archivo() -> list[dict]:
+    ruta = Path("data/noticias_extraidas.json")
+    if not ruta.exists() or ruta.stat().st_size < 10:
+        return []
+    try:
+        return json.loads(ruta.read_text(encoding="utf-8"))
+    except Exception:
+        return []
 
-@st.cache_resource
-def build_kg() -> KnowledgeGraphSIMANW:
+
+def _noticias_disponibles() -> list[dict]:
+    sesion = st.session_state.get("noticias", [])
+    return sesion if sesion else _cargar_noticias_archivo()
+
+
+def _normalizar_noticias(noticias_raw: list[dict]) -> list[dict]:
+    normalizadas = []
+    for i, n in enumerate(noticias_raw, start=1):
+        normalizadas.append({
+            **n,
+            "sentimiento": n.get("sentimiento") or {"etiqueta": "neutral", "compound": 0.0},
+            "fuente": n.get("fuente") or n.get("url", "https://simanw.local"),
+            "autor": n.get("autor") or n.get("fuente_nombre") or "Redacción",
+            "fecha": n.get("fecha") or "2026-01-01",
+            "url": n.get("url") or f"https://simanw.local/{i}",
+            "categoria_predicha": (
+                n.get("categoria_predicha")
+                or n.get("categoria_original")
+                or n.get("categoria")
+                or "general"
+            ),
+        })
+    return normalizadas
+
+
+def build_kg(noticias: list[dict]) -> KnowledgeGraphSIMANW:
     kg = KnowledgeGraphSIMANW()
-    kg.construir_desde_noticias(NOTICIAS_KG)
+    kg.construir_desde_noticias(noticias)
     return kg
 
 
@@ -51,7 +86,23 @@ def main() -> None:
         "Exportación del grafo de conocimiento como Turtle y JSON-LD, validación SHACL y consultas SPARQL propias.",
     )
 
-    kg = build_kg()
+    # Determine corpus: real if available, else fallback to demo constant
+    noticias_raw = _noticias_disponibles()
+    if noticias_raw:
+        noticias_raw = noticias_raw[:20]
+        noticias = _normalizar_noticias(noticias_raw)
+        corpus_label = f"Corpus real — {len(noticias)} noticias de `data/noticias_extraidas.json`"
+    else:
+        noticias = NOTICIAS_KG
+        corpus_label = f"Corpus demo — {len(noticias)} noticias de ejemplo"
+
+    # Cache KG in session_state keyed by corpus size to avoid rebuilding unnecessarily
+    kg_key = f"kg13_{len(noticias)}"
+    if kg_key not in st.session_state:
+        st.session_state[kg_key] = build_kg(noticias)
+    kg: KnowledgeGraphSIMANW = st.session_state[kg_key]
+
+    st.caption(corpus_label)
 
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "Resumen del grafo", "Consultas SPARQL", "Exportación RDF", "Validación y enlaces", "JSON-LD"
@@ -60,11 +111,11 @@ def main() -> None:
     with tab1:
         st.subheader("Corpus del knowledge graph")
         df_n = pd.DataFrame([{
-            "Título": n.get("titulo",""),
-            "Categoría": n.get("categoria_original", n.get("categoria_predicha","?")),
-            "Fecha": n.get("fecha",""),
-            "Sentimiento": n.get("sentimiento",{}).get("etiqueta","?"),
-        } for n in NOTICIAS_KG])
+            "Título": n.get("titulo", ""),
+            "Categoría": n.get("categoria_original", n.get("categoria_predicha", "?")),
+            "Fecha": n.get("fecha", ""),
+            "Sentimiento": n.get("sentimiento", {}).get("etiqueta", "?"),
+        } for n in noticias])
         st.dataframe(df_n, use_container_width=True, hide_index=True)
         st.metric("Total triples RDF", kg.total_triples())
 
@@ -106,7 +157,6 @@ def main() -> None:
             except Exception as exc:
                 st.error(f"Error al exportar: {exc}")
 
-        rutas_guardadas = st.session_state.get("rutas_export", {})
         for fmt in ["turtle", "json-ld"]:
             ruta = Path(f"data/ac13_simanw.{'ttl' if fmt == 'turtle' else 'jsonld'}")
             if ruta.exists():
@@ -160,7 +210,7 @@ def main() -> None:
 
     with tab5:
         st.subheader("Fragmento JSON-LD de una noticia")
-        noticia_id = st.slider("ID de noticia", 1, len(NOTICIAS_KG), 1)
+        noticia_id = st.slider("ID de noticia", 1, len(noticias), 1)
         try:
             fragmento = kg.fragmento_jsonld_noticia(noticia_id)
             if isinstance(fragmento, dict):
@@ -183,4 +233,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

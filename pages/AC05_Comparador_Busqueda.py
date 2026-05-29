@@ -1,6 +1,7 @@
 """AC-5: Comparación Modelo Booleano vs. Vectorial."""
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -30,10 +31,24 @@ st.set_page_config(page_title="SIMANW | AC-5: Comparador de Búsqueda", page_ico
 aplicar_estilo_global()
 
 
+@st.cache_data(show_spinner=False)
+def _cargar_noticias_archivo() -> list[dict]:
+    ruta = Path("data/noticias_extraidas.json")
+    if not ruta.exists() or ruta.stat().st_size < 10:
+        return []
+    try:
+        return json.loads(ruta.read_text(encoding="utf-8"))
+    except Exception:
+        return []
 
-@st.cache_resource
-def get_comparador() -> ComparadorModelos:
-    return ComparadorModelos(NOTICIAS_DEMO)
+
+def _noticias_disponibles() -> list[dict]:
+    sesion = st.session_state.get("noticias", [])
+    return sesion if sesion else _cargar_noticias_archivo()
+
+
+def get_comparador(noticias: list[dict]) -> ComparadorModelos:
+    return ComparadorModelos(noticias)
 
 
 def main() -> None:
@@ -43,7 +58,19 @@ def main() -> None:
         "Evaluación formal de dos modelos de recuperación de información usando Precision, Recall y F1.",
     )
 
-    comparador = get_comparador()
+    noticias_reales = _noticias_disponibles()
+    usando_reales = bool(noticias_reales)
+    noticias = noticias_reales if usando_reales else NOTICIAS_DEMO
+
+    if usando_reales:
+        st.caption(f"Corpus: {len(noticias)} noticias reales")
+    else:
+        st.caption("Corpus: demo (5 documentos)")
+
+    corpus_key = f"comparador_{len(noticias)}"
+    if corpus_key not in st.session_state:
+        st.session_state[corpus_key] = get_comparador(noticias)
+    comparador: ComparadorModelos = st.session_state[corpus_key]
 
     tab1, tab2, tab3 = st.tabs(["Corpus y consultas", "Comparativa automática", "Consulta manual"])
 
@@ -51,7 +78,7 @@ def main() -> None:
         st.subheader("Corpus de documentos")
         df_docs = pd.DataFrame([
             {"#": i, "Título": d["titulo"], "Cuerpo": d["cuerpo"][:80] + "…"}
-            for i, d in enumerate(NOTICIAS_DEMO)
+            for i, d in enumerate(noticias)
         ])
         st.dataframe(df_docs, use_container_width=True, hide_index=True)
 
@@ -113,7 +140,7 @@ def main() -> None:
             ids_bool = comparador.busqueda_booleana(consulta_manual)
             if ids_bool:
                 for idx in ids_bool:
-                    st.markdown(f"- **#{idx}** {NOTICIAS_DEMO[idx]['titulo']}")
+                    st.markdown(f"- **#{idx}** {noticias[idx]['titulo']}")
             else:
                 st.info("Sin resultados booleanos.")
         with col2:
@@ -121,11 +148,10 @@ def main() -> None:
             ids_vec = comparador.busqueda_vectorial(consulta_manual, top_k=3)
             if ids_vec:
                 for idx, score in ids_vec:
-                    st.markdown(f"- **#{idx}** `{score:.3f}` — {NOTICIAS_DEMO[idx]['titulo']}")
+                    st.markdown(f"- **#{idx}** `{score:.3f}` — {noticias[idx]['titulo']}")
             else:
                 st.info("Sin resultados vectoriales.")
 
 
 if __name__ == "__main__":
     main()
-

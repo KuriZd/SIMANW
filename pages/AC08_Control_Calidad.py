@@ -43,6 +43,22 @@ aplicar_estilo_global()
 COLORES_ESTADO = {"Válido": "#10B981", "Rechazado": "#EF4444"}
 
 
+@st.cache_data(show_spinner=False)
+def _cargar_noticias_archivo() -> list[dict]:
+    ruta = Path("data/noticias_extraidas.json")
+    if not ruta.exists() or ruta.stat().st_size < 10:
+        return []
+    try:
+        return json.loads(ruta.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+
+
+def _noticias_disponibles() -> list[dict]:
+    sesion = st.session_state.get("noticias", [])
+    return sesion if sesion else _cargar_noticias_archivo()
+
+
 def main() -> None:
     encabezado(
         "AC-8 | Control de Calidad",
@@ -79,9 +95,26 @@ def main() -> None:
 """)
 
     with tab2:
+        fuente = st.radio(
+            "Corpus a validar",
+            ["Demo (errores intencionales)", "Corpus real"],
+            horizontal=True,
+        )
+
+        if fuente == "Corpus real":
+            noticias_reales = _noticias_disponibles()
+            if noticias_reales:
+                corpus_activo = noticias_reales
+                st.caption(f"Corpus real — {len(corpus_activo)} noticias cargadas desde `data/noticias_extraidas.json` o `st.session_state['noticias']`.")
+            else:
+                st.info("No se encontró corpus real. Usando corpus demo como respaldo.")
+                corpus_activo = CORPUS_DEMO
+        else:
+            corpus_activo = CORPUS_DEMO
+
         if st.button("▶ Ejecutar validación", type="primary"):
             ctrl = ControlCalidadCorpus()
-            corpus_depurado = ctrl.validar(CORPUS_DEMO)
+            corpus_depurado = ctrl.validar(corpus_activo)
             informe = ctrl.generar_informe()
             st.session_state["informe_qc"] = informe
             st.session_state["corpus_depurado"] = corpus_depurado
@@ -145,4 +178,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

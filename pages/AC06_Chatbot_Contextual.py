@@ -1,6 +1,7 @@
 """AC-6: Chatbot con Memoria de Contexto."""
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -36,12 +37,20 @@ st.set_page_config(page_title="SIMANW | AC-6: Chatbot Contextual", page_icon="�
 aplicar_estilo_global()
 
 
+@st.cache_data(show_spinner=False)
+def _cargar_noticias_archivo() -> list[dict]:
+    ruta = Path("data/noticias_extraidas.json")
+    if not ruta.exists() or ruta.stat().st_size < 10:
+        return []
+    try:
+        return json.loads(ruta.read_text(encoding="utf-8"))
+    except Exception:
+        return []
 
-@st.cache_resource
-def get_chatbot() -> ChatbotContextual:
-    motor = MotorBusqueda()
-    motor.indexar(NOTICIAS_DEMO)
-    return ChatbotContextual(NOTICIAS_DEMO, motor)
+
+def _noticias_disponibles() -> list[dict]:
+    sesion = st.session_state.get("noticias", [])
+    return sesion if sesion else _cargar_noticias_archivo()
 
 
 def main() -> None:
@@ -51,7 +60,21 @@ def main() -> None:
         "Chatbot que recuerda temas previos dentro de la sesión y adapta sus respuestas al contexto acumulado.",
     )
 
-    chatbot = get_chatbot()
+    noticias_reales = _noticias_disponibles()
+    usando_reales = bool(noticias_reales)
+    noticias = noticias_reales if usando_reales else NOTICIAS_DEMO
+
+    if usando_reales:
+        st.caption(f"Corpus: {len(noticias)} noticias reales")
+    else:
+        st.caption("Corpus: demo (5 documentos)")
+
+    corpus_key = f"chatbot_{len(noticias)}"
+    if corpus_key not in st.session_state:
+        motor = MotorBusqueda()
+        motor.indexar(noticias)
+        st.session_state[corpus_key] = ChatbotContextual(noticias, motor)
+    chatbot: ChatbotContextual = st.session_state[corpus_key]
 
     if "historial" not in st.session_state:
         st.session_state.historial = []
@@ -122,10 +145,9 @@ def main() -> None:
 
         st.divider()
         st.subheader("Noticias del corpus")
-        for i, n in enumerate(NOTICIAS_DEMO):
+        for i, n in enumerate(noticias[:10]):
             st.markdown(f"**{i}** — {n['titulo'][:40]}…")
 
 
 if __name__ == "__main__":
     main()
-

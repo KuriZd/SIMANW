@@ -1,6 +1,7 @@
 """AC-7: Enriquecimiento del Knowledge Graph con Wikidata."""
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -45,11 +46,25 @@ st.set_page_config(page_title="SIMANW | AC-7: Enriquecimiento KG", page_icon="�
 aplicar_estilo_global()
 
 
+@st.cache_data(show_spinner=False)
+def _cargar_noticias_archivo() -> list[dict]:
+    ruta = Path("data/noticias_extraidas.json")
+    if not ruta.exists() or ruta.stat().st_size < 10:
+        return []
+    try:
+        return json.loads(ruta.read_text(encoding="utf-8"))
+    except Exception:
+        return []
 
-@st.cache_resource
-def construir_kg_enriquecido() -> tuple[KnowledgeGraphSIMANW, EnriquecedorKG, int]:
+
+def _noticias_disponibles() -> list[dict]:
+    sesion = st.session_state.get("noticias", [])
+    return sesion if sesion else _cargar_noticias_archivo()
+
+
+def construir_kg_enriquecido(noticias: list[dict]) -> tuple[KnowledgeGraphSIMANW, EnriquecedorKG, int]:
     kg = KnowledgeGraphSIMANW()
-    kg.construir_desde_noticias(NOTICIAS_KG)
+    kg.construir_desde_noticias(noticias)
     triples_antes = kg.total_triples()
     enriquecedor = enriquecer_categorias_demo(kg)
     return kg, enriquecedor, triples_antes
@@ -62,19 +77,46 @@ def main() -> None:
         "Enlaza las categorías del knowledge graph local con entidades externas de Wikidata usando SKOS.",
     )
 
+    noticias_raw = _noticias_disponibles()
+    if noticias_raw:
+        noticias = noticias_raw[:30]
+        fuente_label = f"Corpus real — {len(noticias)} de {len(noticias_raw)} noticias (límite 30)"
+        usando_demo = False
+    else:
+        noticias = NOTICIAS_KG
+        fuente_label = f"Corpus demo — {len(noticias)} noticias (no se encontró data/noticias_extraidas.json)"
+        usando_demo = True
+
+    # Normalise fields that may be absent in real noticias
+    noticias_norm: list[dict] = []
+    for n in noticias:
+        item = dict(n)
+        item["sentimiento"] = item.get("sentimiento") or {"etiqueta": "neutral", "compound": 0.0}
+        item["fuente"] = item.get("fuente") or item.get("url", "https://simanw.local")
+        noticias_norm.append(item)
+
+    st.caption(fuente_label)
+
     tab1, tab2, tab3, tab4 = st.tabs(["Corpus", "Enriquecimiento", "Links locales↔Wikidata", "Consultas SPARQL"])
 
     with tab1:
-        st.subheader(f"Noticias del corpus — {len(NOTICIAS_KG)} documentos")
+        st.subheader(f"Noticias del corpus — {len(noticias_norm)} documentos")
+        if not usando_demo:
+            st.caption("Mostrando noticias cargadas desde `data/noticias_extraidas.json` o `st.session_state['noticias']`.")
         df = pd.DataFrame([{
-            "Título": n["titulo"], "Categoría": n["categoria_predicha"],
-            "Sentimiento": n["sentimiento"]["etiqueta"], "Autor": n["autor"],
-        } for n in NOTICIAS_KG])
+            "Título": n.get("titulo", ""),
+            "Categoría": n.get("categoria_predicha") or n.get("categoria_original") or n.get("categoria", "?"),
+            "Sentimiento": n["sentimiento"]["etiqueta"],
+            "Autor": n.get("autor", ""),
+        } for n in noticias_norm])
         st.dataframe(df, use_container_width=True, hide_index=True)
 
     with tab2:
         st.subheader("Proceso de enriquecimiento")
-        kg, enriquecedor, triples_antes = construir_kg_enriquecido()
+        cache_key = f"kg_{len(noticias_norm)}"
+        if cache_key not in st.session_state:
+            st.session_state[cache_key] = construir_kg_enriquecido(noticias_norm)
+        kg, enriquecedor, triples_antes = st.session_state[cache_key]
         triples_despues = kg.total_triples()
 
         c1, c2, c3 = st.columns(3)
@@ -130,4 +172,3 @@ El `EnriquecedorKG`:
 
 if __name__ == "__main__":
     main()
-
