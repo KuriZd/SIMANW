@@ -109,6 +109,54 @@ def test_ac11_json_real_con_tres_participantes_es_evidencia_real(tmp_path, monke
     assert len(estudio.participantes) == 3
 
 
+def test_ac4_deriva_hilo_desde_corpus_y_lo_marca_parcial(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    Path("data").mkdir()
+    service = SIMANWAppService()
+    corpus = [
+        {
+            "titulo": "Debate sobre energia renovable",
+            "cuerpo": "Los participantes discuten inversion en energia solar y eolica.",
+            "autor": "Analista 1",
+            "fecha": "2026-05-01",
+        },
+        {
+            "titulo": "Respuesta ciudadana",
+            "cuerpo": "La comunidad pregunta por costos y beneficios de la transicion energetica.",
+            "autor": "Analista 2",
+            "fecha": "2026-05-02",
+        },
+    ]
+
+    evidencia = service._generar_evidencia_ac4(corpus)
+
+    assert evidencia["estado"] == "parcial"
+    assert evidencia["origen_datos"] == "corpus_derivado"
+    assert evidencia["total_mensajes"] == 2
+    assert Path(evidencia["archivo_json"]).exists()
+
+
+def test_ac4_archivo_real_con_ocho_mensajes_es_completo(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    Path("data").mkdir()
+    mensajes = [
+        {
+            "usuario": f"usuario_{idx % 3}",
+            "texto": f"Mensaje {idx} sobre seguridad digital, privacidad y tecnologia responsable.",
+            "timestamp": f"2026-05-{idx + 1:02d}",
+        }
+        for idx in range(8)
+    ]
+    Path("data/hilo_discusion.json").write_text(json.dumps(mensajes, ensure_ascii=False), encoding="utf-8")
+
+    evidencia = SIMANWAppService()._generar_evidencia_ac4([])
+
+    assert evidencia["estado"] == "completo"
+    assert evidencia["origen_datos"] == "archivo_real"
+    assert evidencia["total_mensajes"] == 8
+    assert evidencia["subtemas_detectados"] >= 1
+
+
 def test_wikidata_offline_queda_explicito(monkeypatch):
     monkeypatch.delenv("SIMANW_WIKIDATA_ONLINE", raising=False)
     kg = KnowledgeGraphSIMANW()

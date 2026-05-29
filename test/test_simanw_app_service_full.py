@@ -29,7 +29,7 @@ def test_simanw_app_service_demo_pipeline_runs_successfully():
     assert result.evidencias_ac["AC-7"]["estado"] in {"completo", "parcial", "pendiente"}
     assert "Fase-7" in result.evidencias_ac
     assert result.evidencias_ac["Fase-7"]["estado"] == "completo"
-    for ac in ("AC-8", "AC-9", "AC-10", "AC-11", "AC-12", "AC-13"):
+    for ac in ("AC-4", "AC-8", "AC-9", "AC-10", "AC-11", "AC-12", "AC-13"):
         assert ac in result.evidencias_ac
 
 

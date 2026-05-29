@@ -68,7 +68,7 @@ class SeccionResultados(ctk.CTkFrame):
         self.grid_columnconfigure(0, minsize=260, weight=0)
         self.grid_columnconfigure(1, weight=1)
 
-        left = ctk.CTkFrame(self, fg_color=THEME["bg_base"], corner_radius=0)
+        left = ctk.CTkScrollableFrame(self, fg_color=THEME["bg_base"], corner_radius=0)
         left.grid(row=0, column=0, sticky="nsew", padx=(18, 8), pady=12)
         left.grid_columnconfigure(0, weight=1)
 
@@ -81,9 +81,10 @@ class SeccionResultados(ctk.CTkFrame):
         self._build_stats_card(left, stats).grid(row=0, column=0, sticky="ew", pady=(0, 10))
         self._build_auto_analysis_card(left).grid(row=1, column=0, sticky="ew", pady=(0, 10))
         self._build_trends_card(left).grid(row=2, column=0, sticky="ew", pady=(0, 10))
-        self._build_discourse_card(left).grid(row=3, column=0, sticky="ew", pady=(0, 10))
-        self._build_similarity_card(left).grid(row=4, column=0, sticky="ew", pady=(0, 10))
-        self._build_export_card(left).grid(row=5, column=0, sticky="ew")
+        self._build_thread_card(left).grid(row=3, column=0, sticky="ew", pady=(0, 10))
+        self._build_discourse_card(left).grid(row=4, column=0, sticky="ew", pady=(0, 10))
+        self._build_similarity_card(left).grid(row=5, column=0, sticky="ew", pady=(0, 10))
+        self._build_export_card(left).grid(row=6, column=0, sticky="ew")
 
         self._build_tabla_card(right).grid(row=0, column=0, sticky="nsew", pady=(0, 10))
         self._build_detalle_card(right).grid(row=1, column=0, sticky="nsew")
@@ -141,9 +142,10 @@ class SeccionResultados(ctk.CTkFrame):
 
     def _build_trends_card(self, master) -> ctk.CTkFrame:
         card = self._card(master)
+        card.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(
             card, text="Timeline & trends (AC-9)", font=FONT_H2, text_color=THEME["text_1"]
-        ).grid(row=0, column=0, sticky="w", padx=CARD_PADDING, pady=(CARD_PADDING, 8))
+        ).grid(row=0, column=0, sticky="ew", padx=CARD_PADDING, pady=(CARD_PADDING, 8))
 
         analisis = getattr(self.root_app, "analisis", {}) or {}
         tendencias = analisis.get("tendencias", {})
@@ -167,9 +169,60 @@ class SeccionResultados(ctk.CTkFrame):
                 f"Pico: {pico.get('categoria', '-')} / {pico.get('periodo', '-')} ({pico.get('count', 0)} noticias)\n"
                 f"Archivos: {', '.join(archivos) or '-'}"
             )
-        ctk.CTkLabel(card, text=texto, font=FONT_BODY, text_color=THEME["text_1"], justify="left", wraplength=230).grid(
-            row=1, column=0, sticky="w", padx=CARD_PADDING, pady=(0, CARD_PADDING)
+        box = ctk.CTkFrame(card, fg_color=THEME["bg_input"], corner_radius=CARD_RADIUS)
+        box.grid(row=1, column=0, sticky="ew", padx=CARD_PADDING, pady=(0, CARD_PADDING))
+        box.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(
+            box,
+            text=texto,
+            font=FONT_BODY,
+            text_color=THEME["text_1"],
+            justify="left",
+            anchor="w",
+            wraplength=250,
+        ).grid(
+            row=0, column=0, sticky="ew", padx=10, pady=10
         )
+        return card
+
+    def _build_thread_card(self, master) -> ctk.CTkFrame:
+        card = self._card(master)
+        card.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(
+            card, text="Thread discussion analysis (AC-4)", font=FONT_H2, text_color=THEME["text_1"]
+        ).grid(row=0, column=0, sticky="ew", padx=CARD_PADDING, pady=(CARD_PADDING, 8))
+
+        evidencia = {}
+        result = getattr(self.root_app, "resultado_actual", None)
+        if result:
+            evidencia = result.evidencias_ac.get("AC-4", {})
+
+        if not evidencia:
+            texto = "AC-4 pendiente: ejecuta el pipeline para analizar un hilo o corpus derivado."
+        else:
+            texto = (
+                f"Estado: {evidencia.get('estado', 'pendiente')}\n"
+                f"Origen: {evidencia.get('origen_datos', '-')}\n"
+                f"Mensajes: {evidencia.get('total_mensajes', 0)} | Participantes: {evidencia.get('participantes', 0)}\n"
+                f"Tono: {evidencia.get('tono', '-')} ({_fmt_signed(evidencia.get('sentimiento_promedio'))})\n"
+                f"Subtemas: {evidencia.get('subtemas_detectados', 0)}\n"
+                f"Archivo: {evidencia.get('archivo_json', '-')}"
+            )
+            if evidencia.get("observacion"):
+                texto += f"\nNota: {evidencia['observacion']}"
+
+        box = ctk.CTkFrame(card, fg_color=THEME["bg_input"], corner_radius=CARD_RADIUS)
+        box.grid(row=1, column=0, sticky="ew", padx=CARD_PADDING, pady=(0, CARD_PADDING))
+        box.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(
+            box,
+            text=texto,
+            font=FONT_BODY,
+            text_color=THEME["text_1"],
+            justify="left",
+            anchor="w",
+            wraplength=250,
+        ).grid(row=0, column=0, sticky="ew", padx=10, pady=10)
         return card
 
     def _build_discourse_card(self, master) -> ctk.CTkFrame:
@@ -411,6 +464,10 @@ class SeccionResultados(ctk.CTkFrame):
 
 def _fmt_float(value) -> str:
     return f"{value:.1f}" if isinstance(value, (int, float)) else "-"
+
+
+def _fmt_signed(value) -> str:
+    return f"{float(value):+.3f}" if isinstance(value, (int, float)) else "-"
 
 
 def _top_lista(items: list) -> str:

@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 from src.exportador import guardar_json
 from src.alertas_consulta import ConsultaGuardada, SistemaAlertasConsulta, consultas_demo
 from src.analisis_discurso import AnalisisDiscurso
+from src.analizador_hilo import AnalizadorHiloDiscusion, cargar_hilo_desde_json
 from src.control_calidad import ControlCalidadCorpus
 from src.fase1_service import Fase1Service
 from src.fase2_service import Fase2Service
@@ -192,6 +193,13 @@ class SIMANWAppService:
                 if ruta_ac2:
                     rutas["analisis_ac2_json"] = ruta_ac2
                     archivos.append(ruta_ac2)
+            evidencia_ac4 = self._generar_evidencia_ac4(corpus)
+            if evidencia_ac4:
+                evidencias_ac["AC-4"] = evidencia_ac4
+                ruta_ac4 = evidencia_ac4.get("archivo_json")
+                if ruta_ac4:
+                    rutas["analisis_ac4_json"] = ruta_ac4
+                    archivos.append(ruta_ac4)
             status.nlp = "partial" if resultado_f2.errores else "completed"
         except Exception as exc:
             status.nlp = "error"
@@ -653,6 +661,59 @@ class SIMANWAppService:
             "archivo_json": ruta,
         }
 
+    def _generar_evidencia_ac4(self, corpus: list[dict]) -> dict:
+        ruta_hilo = Path("data/hilo_discusion.json")
+        origen = "archivo_real" if ruta_hilo.exists() else "corpus_derivado"
+        try:
+            if ruta_hilo.exists():
+                mensajes = cargar_hilo_desde_json(ruta_hilo)
+            else:
+                mensajes = self._mensajes_desde_corpus(corpus)
+            if not mensajes:
+                return {
+                    "actividad": "AC-4",
+                    "estado": "pendiente",
+                    "ejecutado_desde": "Smart Results",
+                    "origen_datos": origen,
+                    "observacion": "No hay mensajes o noticias suficientes para analizar un hilo.",
+                }
+
+            analizador = AnalizadorHiloDiscusion(idioma="spanish")
+            analizador.cargar_hilo(mensajes)
+            resumen = analizador.resumen_hilo()
+            subtemas = analizador.detectar_subtemas(n_clusters=min(3, max(1, len(mensajes))))
+            ruta = Path("data/analisis_ac4.json")
+            analizador.guardar_json(ruta)
+            estado = "completo" if origen == "archivo_real" and len(mensajes) >= 8 else "parcial"
+            return {
+                "actividad": "AC-4",
+                "estado": estado,
+                "ultima_ejecucion": datetime.now(timezone.utc).isoformat(),
+                "ejecutado_desde": "Smart Results",
+                "origen_datos": origen,
+                "total_mensajes": resumen.get("total_mensajes", 0),
+                "participantes": resumen.get("participantes", 0),
+                "tono": resumen.get("tono", "mixto"),
+                "sentimiento_promedio": resumen.get("sentimiento_promedio", 0.0),
+                "subtemas_detectados": len(subtemas),
+                "hashtags_top": resumen.get("hashtags_top", []),
+                "usuarios_activos": resumen.get("usuarios_activos", []),
+                "archivo_json": str(ruta),
+                "observacion": (
+                    "" if estado == "completo"
+                    else "No se encontro data/hilo_discusion.json; se uso el corpus de noticias como conversacion derivada."
+                ),
+            }
+        except Exception as exc:
+            return {
+                "actividad": "AC-4",
+                "estado": "parcial",
+                "ultima_ejecucion": datetime.now(timezone.utc).isoformat(),
+                "ejecutado_desde": "Smart Results",
+                "origen_datos": origen,
+                "observacion": f"No se pudo analizar AC-4: {exc}",
+            }
+
     @staticmethod
     def _normalizar_para_calidad(noticia: dict, indice: int) -> dict:
         url = str(noticia.get("url") or f"https://simanw.local/noticia/{indice}").strip()
@@ -689,6 +750,25 @@ class SIMANWAppService:
             "cuerpo": item.get("cuerpo") or item.get("texto_original") or item.get("texto_limpio") or "",
             "url": item.get("url") or f"https://simanw.local/alertas/{indice}",
         }
+
+    @staticmethod
+    def _mensajes_desde_corpus(corpus: list[dict]) -> list[dict]:
+        mensajes: list[dict] = []
+        for indice, item in enumerate(corpus[:20], start=1):
+            texto = " ".join(
+                str(item.get(campo, "") or "")
+                for campo in ("titulo", "texto_original", "cuerpo", "texto_limpio")
+            ).strip()
+            if not texto:
+                continue
+            mensajes.append(
+                {
+                    "usuario": item.get("autor") or item.get("fuente") or f"fuente_{indice}",
+                    "texto": texto[:500],
+                    "timestamp": str(item.get("fecha") or indice),
+                }
+            )
+        return mensajes
 
     @staticmethod
     def _cargar_estudio_usabilidad() -> tuple[EstudioUsabilidad, str]:
