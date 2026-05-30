@@ -1,7 +1,7 @@
 """AC-8: Control de calidad del corpus rastreado.
 
 Reglas de validez mínimas documentadas
----------------------------------------
+--------------------------------------
 Campo           Regla
 -----------     ------------------------------------------------
 titulo          Obligatorio; longitud mínima 5 caracteres.
@@ -13,10 +13,10 @@ categoria_original  Obligatorio; no puede estar vacío.
 fuente          Obligatorio; debe comenzar con http:// o https://.
 
 Duplicados
------------
-- Exactos   : misma URL (comparación literal tras strip()).
-- Casi idénticos: mismo título normalizado (minúsculas, colapso de
-  espacios) o misma URL normalizada.
+----------
+- Exactos: misma URL, comparada tras normalizar mayúsculas y espacios.
+- Casi idénticos: mismo título normalizado, colapsando espacios y
+  comparando en minúsculas.
 """
 from __future__ import annotations
 
@@ -26,9 +26,6 @@ from pathlib import Path
 from typing import Any
 
 
-# ---------------------------------------------------------------------------
-# Constantes de configuración
-# ---------------------------------------------------------------------------
 LONGITUD_MINIMA_CUERPO: int = 50
 LONGITUD_MINIMA_TITULO: int = 5
 PATRON_FECHA = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -45,9 +42,6 @@ CAMPOS_OBLIGATORIOS: tuple[str, ...] = (
 )
 
 
-# ---------------------------------------------------------------------------
-# Módulo principal
-# ---------------------------------------------------------------------------
 class ControlCalidadCorpus:
     """Valida y depura un corpus de noticias antes del pipeline NLP."""
 
@@ -65,11 +59,8 @@ class ControlCalidadCorpus:
         self._urls_vistas: set[str] = set()
         self._titulos_vistos: set[str] = set()
 
-    # ------------------------------------------------------------------
-    # API pública
-    # ------------------------------------------------------------------
     def validar(self, corpus: list[dict]) -> list[dict]:
-        """Valida *corpus* in-place; devuelve solo los registros válidos."""
+        """Valida el corpus y devuelve solo los registros válidos."""
         self.corpus_depurado = []
         self.registros_rechazados = []
         self._urls_vistas = set()
@@ -89,21 +80,23 @@ class ControlCalidadCorpus:
         total = len(self.corpus_depurado) + len(self.registros_rechazados)
         invalidos_incompletos = sum(
             1
-            for r in self.registros_rechazados
+            for registro in self.registros_rechazados
             if any(
-                m.startswith("Campo") or m.startswith("Longitud") or m.startswith("Formato")
-                for m in r["motivos"]
+                motivo.startswith("Campo")
+                or motivo.startswith("Longitud")
+                or motivo.startswith("Formato")
+                for motivo in registro["motivos"]
             )
         )
         duplicados_exactos = sum(
             1
-            for r in self.registros_rechazados
-            if any("duplicado exacto" in m for m in r["motivos"])
+            for registro in self.registros_rechazados
+            if any("duplicado exacto" in motivo for motivo in registro["motivos"])
         )
         duplicados_similares = sum(
             1
-            for r in self.registros_rechazados
-            if any("duplicado por título" in m for m in r["motivos"])
+            for registro in self.registros_rechazados
+            if any("duplicado por título" in motivo for motivo in registro["motivos"])
         )
 
         return {
@@ -115,19 +108,19 @@ class ControlCalidadCorpus:
             "duplicados_casi_identicos_titulo": duplicados_similares,
             "detalle_rechazados": [
                 {
-                    "titulo": r["registro"].get("titulo", "(sin título)"),
-                    "url": r["registro"].get("url", "(sin url)"),
-                    "motivos": r["motivos"],
+                    "titulo": item["registro"].get("titulo", "(sin título)"),
+                    "url": item["registro"].get("url", "(sin url)"),
+                    "motivos": item["motivos"],
                 }
-                for r in self.registros_rechazados
+                for item in self.registros_rechazados
             ],
         }
 
     def guardar_informe(self, ruta: str | Path = "data/informe_calidad.json") -> Path:
         ruta = Path(ruta)
         ruta.parent.mkdir(parents=True, exist_ok=True)
-        with ruta.open("w", encoding="utf-8") as f:
-            json.dump(self.generar_informe(), f, ensure_ascii=False, indent=2)
+        with ruta.open("w", encoding="utf-8") as archivo:
+            json.dump(self.generar_informe(), archivo, ensure_ascii=False, indent=2)
         return ruta
 
     def parrafo_resumen(self) -> str:
@@ -136,9 +129,9 @@ class ControlCalidadCorpus:
         total = informe["total_registros"]
         validos = informe["registros_validos"]
         rechazados = informe["registros_rechazados"]
-        inv = informe["invalidos_o_incompletos"]
-        dup_url = informe["duplicados_exactos_url"]
-        dup_tit = informe["duplicados_casi_identicos_titulo"]
+        invalidos = informe["invalidos_o_incompletos"]
+        duplicados_url = informe["duplicados_exactos_url"]
+        duplicados_titulo = informe["duplicados_casi_identicos_titulo"]
 
         if rechazados == 0:
             return (
@@ -152,15 +145,18 @@ class ControlCalidadCorpus:
             )
 
         partes = []
-        if inv:
+        if invalidos:
             partes.append(
-                f"{inv} registro(s) por campos obligatorios ausentes, "
+                f"{invalidos} registro(s) por campos obligatorios ausentes, "
                 "cuerpo demasiado corto, fecha con formato incorrecto o URL inválida"
             )
-        if dup_url:
-            partes.append(f"{dup_url} registro(s) por URL duplicada (duplicado exacto)")
-        if dup_tit:
-            partes.append(f"{dup_tit} registro(s) por título normalizado idéntico (duplicado casi idéntico)")
+        if duplicados_url:
+            partes.append(f"{duplicados_url} registro(s) por URL duplicada (duplicado exacto)")
+        if duplicados_titulo:
+            partes.append(
+                f"{duplicados_titulo} registro(s) por título normalizado idéntico "
+                "(duplicado casi idéntico)"
+            )
 
         motivos_texto = "; ".join(partes)
         return (
@@ -180,19 +176,23 @@ class ControlCalidadCorpus:
     def guardar_corpus_depurado(self, ruta: str | Path = "data/corpus_depurado_ac8.json") -> Path:
         ruta = Path(ruta)
         ruta.parent.mkdir(parents=True, exist_ok=True)
-        with ruta.open("w", encoding="utf-8") as f:
-            json.dump(self.corpus_depurado, f, ensure_ascii=False, indent=2)
+        with ruta.open("w", encoding="utf-8") as archivo:
+            json.dump(self.corpus_depurado, archivo, ensure_ascii=False, indent=2)
         return ruta
 
     def guardar_rechazados(self, ruta: str | Path = "data/registros_rechazados_ac8.json") -> Path:
         ruta = Path(ruta)
         ruta.parent.mkdir(parents=True, exist_ok=True)
         payload = [
-            {"titulo": r["registro"].get("titulo", ""), "url": r["registro"].get("url", ""), "motivos": r["motivos"]}
-            for r in self.registros_rechazados
+            {
+                "titulo": item["registro"].get("titulo", ""),
+                "url": item["registro"].get("url", ""),
+                "motivos": item["motivos"],
+            }
+            for item in self.registros_rechazados
         ]
-        with ruta.open("w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
+        with ruta.open("w", encoding="utf-8") as archivo:
+            json.dump(payload, archivo, ensure_ascii=False, indent=2)
         return ruta
 
     def guardar_resumen_markdown(self, ruta: str | Path = "reports/resumen_calidad_ac8.md") -> Path:
@@ -203,11 +203,11 @@ class ControlCalidadCorpus:
             "# AC-8: Resumen de Control de Calidad del Corpus",
             "",
             f"**Total registros:** {informe['total_registros']}  ",
-            f"**Validos:** {informe['registros_validos']}  ",
+            f"**Válidos:** {informe['registros_validos']}  ",
             f"**Rechazados:** {informe['registros_rechazados']}  ",
-            f"**Invalidos/incompletos:** {informe['invalidos_o_incompletos']}  ",
+            f"**Inválidos/incompletos:** {informe['invalidos_o_incompletos']}  ",
             f"**Duplicados exactos (URL):** {informe['duplicados_exactos_url']}  ",
-            f"**Duplicados casi identicos (titulo):** {informe['duplicados_casi_identicos_titulo']}",
+            f"**Duplicados casi idénticos (título):** {informe['duplicados_casi_identicos_titulo']}",
             "",
             "## Resumen",
             "",
@@ -216,19 +216,14 @@ class ControlCalidadCorpus:
         ruta.write_text("\n".join(lineas), encoding="utf-8")
         return ruta
 
-    # ------------------------------------------------------------------
-    # Lógica de validación interna
-    # ------------------------------------------------------------------
     def _evaluar(self, registro: dict) -> list[str]:
         motivos: list[str] = []
 
-        # 1. Campos obligatorios presentes y no vacíos
         for campo in CAMPOS_OBLIGATORIOS:
             valor = registro.get(campo, None)
             if valor is None or str(valor).strip() == "":
                 motivos.append(f"Campo obligatorio ausente o vacío: '{campo}'")
 
-        # 2. Longitudes mínimas (solo si el campo existe)
         titulo = str(registro.get("titulo", "")).strip()
         if titulo and len(titulo) < self.longitud_minima_titulo:
             motivos.append(
@@ -241,30 +236,24 @@ class ControlCalidadCorpus:
                 f"Longitud del cuerpo insuficiente: {len(cuerpo)} < {self.longitud_minima_cuerpo}"
             )
 
-        # 3. Formato de fecha YYYY-MM-DD
         fecha = str(registro.get("fecha", "")).strip()
         if fecha and not PATRON_FECHA.match(fecha):
             motivos.append(f"Formato de fecha inválido: '{fecha}' (se esperaba YYYY-MM-DD)")
 
-        # 4. Coherencia de URLs
         for campo_url in ("url", "fuente"):
             valor_url = str(registro.get(campo_url, "")).strip()
             if valor_url and not PATRON_URL.match(valor_url):
                 motivos.append(f"URL inválida en campo '{campo_url}': '{valor_url}'")
 
-        # Si ya hay errores estructurales, no chequear duplicados para evitar
-        # contaminar los conjuntos de URLs/títulos vistos con datos inválidos.
         if motivos:
             return motivos
 
-        # 5. Duplicados exactos por URL
         url_norm = str(registro.get("url", "")).strip().lower()
         if url_norm in self._urls_vistas:
             motivos.append(f"Registro duplicado exacto (URL repetida): '{url_norm}'")
             return motivos
         self._urls_vistas.add(url_norm)
 
-        # 6. Duplicados casi idénticos por título normalizado
         titulo_norm = re.sub(r"\s+", " ", titulo.lower()).strip()
         if titulo_norm in self._titulos_vistos:
             motivos.append(f"Registro duplicado por título normalizado: '{titulo_norm}'")

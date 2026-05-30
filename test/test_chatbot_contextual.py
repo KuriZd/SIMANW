@@ -1,4 +1,5 @@
 from src.chatbot_contextual import ChatbotContextual
+from src.fase5_service import Fase5Service
 from src.motor_busqueda import MotorBusqueda
 
 
@@ -77,3 +78,19 @@ def test_chatbot_contextual_estadisticas_sesion_y_fallback():
     assert "No encontre" in respuesta
     assert stats["interacciones"] == 1
     assert stats["tipos_respuesta"]["fallback"] == 1
+
+
+def test_fase5_service_usa_chatbot_contextual_con_motor_real():
+    service = Fase5Service()
+    service.preparar(noticias_demo(), motor_demo())
+
+    primera = service.responder("Que noticias hay de tecnologia?")
+    segunda = service.responder("Cuentame mas sobre eso")
+    historial = service.obtener_historial()
+    stats = service.estadisticas_contexto()
+
+    assert primera
+    assert "conversacion anterior" in segunda
+    assert historial[-1]["tipo"] == "contextual"
+    assert historial[-1]["usa_contexto"] is True
+    assert stats["ultima_consulta_expandida"]

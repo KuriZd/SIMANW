@@ -26,11 +26,12 @@ class Fase5Service:
             raise ValueError("No hay corpus para preparar Q&A.")
         self.corpus = [_normalizar_doc(doc) for doc in corpus_procesado]
         self.motor_busqueda = motor_busqueda
+        self.historial = []
         if SistemaQA is not None and motor_busqueda is not None:
             self.qa = SistemaQA(self.corpus, motor_busqueda)
-        if ChatbotContextual is not None:
+        if ChatbotContextual is not None and motor_busqueda is not None:
             try:
-                self.contextual = ChatbotContextual(self.corpus)
+                self.contextual = ChatbotContextual(self.corpus, motor_busqueda)
             except Exception:
                 self.contextual = None
 
@@ -44,9 +45,23 @@ class Fase5Service:
         respuesta = "No tengo informacion suficiente para responder con el corpus cargado."
         tipo = "sin_informacion"
         confianza = 0.0
+        consulta_expandida = ""
         try:
-            if self.qa is not None:
+            if self.contextual is not None and self.contextual.detectar_referencia_contextual(pregunta):
+                respuesta, tipo, confianza = self.contextual.responder(pregunta)
+                consulta_expandida = self.contextual.ultima_consulta_expandida
+            elif self.qa is not None and self.qa.clasificar_intencion(pregunta) in {
+                "conteo",
+                "resumen",
+                "sentimiento",
+                "categoria",
+            }:
                 respuesta, tipo, confianza = self.qa.conversar(pregunta)
+                if self.contextual is not None:
+                    self.contextual.actualizar_contexto(pregunta, tipo)
+            elif self.contextual is not None:
+                respuesta, tipo, confianza = self.contextual.responder(pregunta)
+                consulta_expandida = self.contextual.ultima_consulta_expandida
             elif self.motor_busqueda is not None:
                 resultados = self.motor_busqueda.buscar_vectorial(pregunta, top_k=1)
                 if resultados:
@@ -64,12 +79,32 @@ class Fase5Service:
                 "respuesta": respuesta,
                 "tipo": tipo,
                 "confianza": confianza,
+                "consulta_expandida": consulta_expandida,
+                "usa_contexto": tipo in {"contextual", "personalizada"} or bool(consulta_expandida),
             }
         )
         return respuesta
 
     def obtener_historial(self) -> list[dict]:
         return list(self.historial)
+
+    def estadisticas_contexto(self) -> dict:
+        if self.contextual is None:
+            return {
+                "interacciones": len(self.historial),
+                "temas_interes": {},
+                "tipos_respuesta": {},
+                "ultima_consulta_expandida": "",
+                "tiene_contexto": False,
+            }
+        stats = self.contextual.estadisticas_sesion()
+        return {
+            "interacciones": stats["interacciones"],
+            "temas_interes": stats["temas_interes"],
+            "tipos_respuesta": dict(stats["tipos_respuesta"]),
+            "ultima_consulta_expandida": stats["ultima_consulta_expandida"],
+            "tiene_contexto": stats["tiene_contexto"],
+        }
 
 
 def _normalizar_doc(doc: dict) -> dict:

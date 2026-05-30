@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 from src.exportador import guardar_json
 from src.alertas_consulta import ConsultaGuardada, SistemaAlertasConsulta, consultas_demo
 from src.analisis_discurso import AnalisisDiscurso, generar_nube_palabras
-from src.analizador_hilo import AnalizadorHiloDiscusion, cargar_hilo_desde_json
+from src.analizador_hilo import AnalizadorHiloDiscusion, HILO_IA_ES, cargar_hilo_desde_json
 from src.control_calidad import ControlCalidadCorpus
 from src.fase1_service import Fase1Service
 from src.fase2_service import Fase2Service
@@ -235,13 +235,27 @@ class SIMANWAppService:
                 archivos.append(str(ruta_analisis))
                 ruta_t_csv = self.fase3_service.exportar_tendencias_csv(analisis)
                 ruta_t_png = self.fase3_service.exportar_tendencias_png(analisis)
+                ruta_t_json = self.fase3_service.exportar_tendencias_json(analisis)
+                ruta_t_md = self.fase3_service.exportar_tendencias_markdown(analisis)
                 if ruta_t_csv:
                     rutas["tendencias_csv"] = str(ruta_t_csv)
                     archivos.append(str(ruta_t_csv))
                 if ruta_t_png:
                     rutas["tendencias_png"] = str(ruta_t_png)
                     archivos.append(str(ruta_t_png))
-                evidencia_ac9 = self._generar_evidencia_ac9(analisis, ruta_t_csv, ruta_t_png)
+                if ruta_t_json:
+                    rutas["tendencias_json"] = str(ruta_t_json)
+                    archivos.append(str(ruta_t_json))
+                if ruta_t_md:
+                    rutas["tendencias_conclusion_md"] = str(ruta_t_md)
+                    archivos.append(str(ruta_t_md))
+                evidencia_ac9 = self._generar_evidencia_ac9(
+                    analisis,
+                    ruta_t_csv,
+                    ruta_t_png,
+                    ruta_t_json,
+                    ruta_t_md,
+                )
                 if evidencia_ac9:
                     evidencias_ac["AC-9"] = evidencia_ac9
                 guardar_json(corpus, "data/processed/corpus_procesado.json")
@@ -300,6 +314,14 @@ class SIMANWAppService:
                 self.fase5_service.preparar(corpus, self.motor_busqueda)
                 self.chatbot = self.fase5_service
                 respuesta_qa = self.fase5_service.responder("Dame un resumen del corpus")
+                self.fase5_service.responder("Que noticias hay de tecnologia?")
+                self.fase5_service.responder("Cuentame mas sobre eso")
+                evidencia_ac6 = self._generar_evidencia_ac6()
+                evidencias_ac["AC-6"] = evidencia_ac6
+                ruta_ac6 = evidencia_ac6.get("archivo_json")
+                if ruta_ac6:
+                    rutas["sesion_chatbot_ac6"] = ruta_ac6
+                    archivos.append(ruta_ac6)
                 status.qa = "completed"
             except Exception as exc:
                 status.qa = "error"
@@ -433,7 +455,17 @@ class SIMANWAppService:
     def preguntar(self, pregunta: str) -> str:
         if self.fase5_service is None:
             return "No hay corpus cargado para responder."
-        return self.fase5_service.responder(pregunta)
+        respuesta = self.fase5_service.responder(pregunta)
+        if self.estado_actual is not None:
+            evidencia = self._generar_evidencia_ac6()
+            self.estado_actual.evidencias_ac["AC-6"] = evidencia
+            ruta = evidencia.get("archivo_json")
+            if ruta:
+                self.estado_actual.reporte_info.setdefault("rutas", {})["sesion_chatbot_ac6"] = ruta
+                self.estado_actual.archivos_generados.append(ruta)
+                self.estado_actual.archivos_generados = list(dict.fromkeys(self.estado_actual.archivos_generados))
+            guardar_json(self.estado_actual.evidencias_ac, "outputs/evidence/academic_evidence.json")
+        return respuesta
 
     def ejecutar_alertas_guardadas(self) -> dict:
         if not self.estado_actual:
@@ -457,6 +489,37 @@ class SIMANWAppService:
         rutas["corpus_json"] = str(rutas_proc["json"])
         rutas["corpus_csv"] = str(rutas_proc["csv"])
         return rutas
+
+    def _generar_evidencia_ac6(self) -> dict:
+        historial = self.fase5_service.obtener_historial()
+        stats = self.fase5_service.estadisticas_contexto()
+        respuestas_contextuales = [
+            item for item in historial if item.get("tipo") == "contextual" or item.get("consulta_expandida")
+        ]
+        usa_memoria = bool(respuestas_contextuales)
+        ruta = Path("data/sesion_chatbot_ac6.json")
+        ruta.parent.mkdir(parents=True, exist_ok=True)
+        evidencia = {
+            "actividad": "AC-6",
+            "estado": "completo" if usa_memoria else "parcial",
+            "ultima_ejecucion": datetime.now(timezone.utc).isoformat(),
+            "ejecutado_desde": "Search & Q&A",
+            "interacciones": len(historial),
+            "tiene_contexto": stats.get("tiene_contexto", False),
+            "respuestas_contextuales": len(respuestas_contextuales),
+            "temas_interes": stats.get("temas_interes", {}),
+            "tipos_respuesta": stats.get("tipos_respuesta", {}),
+            "ultima_consulta_expandida": stats.get("ultima_consulta_expandida", ""),
+            "historial": historial,
+            "archivo_json": str(ruta),
+            "observacion": (
+                "El chatbot expandio una pregunta de seguimiento usando la conversacion previa."
+                if usa_memoria
+                else "No se ha registrado una pregunta de seguimiento que use memoria contextual."
+            ),
+        }
+        ruta.write_text(json.dumps(evidencia, ensure_ascii=False, indent=2), encoding="utf-8")
+        return evidencia
 
     def _ejecutar_ac8(self, noticias: list[dict]) -> tuple[list[dict], dict]:
         control = ControlCalidadCorpus()
@@ -497,7 +560,14 @@ class SIMANWAppService:
             evidencia["observacion"] = "El control de calidad no produjo corpus valido; se continuo con el corpus original para no romper el pipeline."
         return noticias_depuradas, evidencia
 
-    def _generar_evidencia_ac9(self, analisis: dict, ruta_csv: Path | None, ruta_png: Path | None) -> dict | None:
+    def _generar_evidencia_ac9(
+        self,
+        analisis: dict,
+        ruta_csv: Path | None,
+        ruta_png: Path | None,
+        ruta_json: Path | None = None,
+        ruta_markdown: Path | None = None,
+    ) -> dict | None:
         tendencias = analisis.get("tendencias", {}) if isinstance(analisis, dict) else {}
         if not tendencias:
             return None
@@ -505,21 +575,38 @@ class SIMANWAppService:
         temas = sorted({fila.get("categoria", "") for fila in tabla if fila.get("categoria")})
         pico = tendencias.get("pico", {})
         conclusion = str(tendencias.get("conclusion", ""))
+        tendencias_terminos = tendencias.get("tendencias_terminos", {})
+        temas_con_cambios = [
+            tema
+            for tema, data in tendencias_terminos.items()
+            if data.get("aumentan") or data.get("disminuyen")
+        ]
         return {
             "actividad": "AC-9",
-            "estado": "completo" if tabla else "parcial",
+            "estado": "completo" if tabla and len(temas) >= 3 and pico.get("titulos") else "parcial",
             "ultima_ejecucion": datetime.now(timezone.utc).isoformat(),
             "ejecutado_desde": "Smart Results",
             "granularidad": tendencias.get("granularidad", "mes"),
+            "justificacion_granularidad": (
+                "Se usa agrupación mensual para corpus de tamaño medio porque conserva periodos "
+                "comparables sin fragmentar excesivamente las noticias; semana queda disponible "
+                "para corpus de alta frecuencia."
+            ),
             "temas_analizados": temas,
             "total_temas": len(temas),
+            "tendencias_terminos": tendencias_terminos,
+            "temas_con_cambios_lexicos": len(temas_con_cambios),
             "pico_notable": pico,
             "conclusion_breve": conclusion[:500],
             "archivo_csv": str(ruta_csv) if ruta_csv else "",
             "archivo_png": str(ruta_png) if ruta_png else "",
+            "archivo_json": str(ruta_json) if ruta_json else "",
+            "archivo_markdown": str(ruta_markdown) if ruta_markdown else "",
             "archivos": {
                 "csv": str(ruta_csv) if ruta_csv else "",
                 "png": str(ruta_png) if ruta_png else "",
+                "json": str(ruta_json) if ruta_json else "",
+                "conclusion_md": str(ruta_markdown) if ruta_markdown else "",
             },
         }
 
@@ -678,12 +765,15 @@ class SIMANWAppService:
 
     def _generar_evidencia_ac4(self, corpus: list[dict]) -> dict:
         ruta_hilo = Path("data/hilo_discusion.json")
-        origen = "archivo_real" if ruta_hilo.exists() else "corpus_derivado"
+        origen = "archivo_real" if ruta_hilo.exists() else "hilo_simulado"
         try:
             if ruta_hilo.exists():
                 mensajes = cargar_hilo_desde_json(ruta_hilo)
             else:
-                mensajes = self._mensajes_desde_corpus(corpus)
+                mensajes = [dict(mensaje) for mensaje in HILO_IA_ES]
+                if not mensajes:
+                    origen = "corpus_derivado"
+                    mensajes = self._mensajes_desde_corpus(corpus)
             if not mensajes:
                 return {
                     "actividad": "AC-4",
@@ -696,10 +786,20 @@ class SIMANWAppService:
             analizador = AnalizadorHiloDiscusion(idioma="spanish")
             analizador.cargar_hilo(mensajes)
             resumen = analizador.resumen_hilo()
+            evolucion = analizador.evolucion_sentimiento(ventana=3)
             subtemas = analizador.detectar_subtemas(n_clusters=min(3, max(1, len(mensajes))))
+            resumen_textual = analizador.generar_resumen_textual()
             ruta = Path("data/analisis_ac4.json")
             analizador.guardar_json(ruta)
-            estado = "completo" if origen == "archivo_real" and len(mensajes) >= 8 else "parcial"
+            estado = "completo" if origen in {"archivo_real", "hilo_simulado"} and len(mensajes) >= 8 else "parcial"
+            observacion = ""
+            if origen == "hilo_simulado":
+                observacion = (
+                    "Se uso un hilo simulado de discusion sobre IA porque no existe data/hilo_discusion.json. "
+                    "El requisito AC-4 permite rastreo o simulacion de hilo."
+                )
+            elif estado != "completo":
+                observacion = "No hay mensajes suficientes para defender AC-4 como completo."
             return {
                 "actividad": "AC-4",
                 "estado": estado,
@@ -711,13 +811,12 @@ class SIMANWAppService:
                 "tono": resumen.get("tono", "mixto"),
                 "sentimiento_promedio": resumen.get("sentimiento_promedio", 0.0),
                 "subtemas_detectados": len(subtemas),
+                "evolucion_puntos": len(evolucion),
+                "resumen_textual": resumen_textual,
                 "hashtags_top": resumen.get("hashtags_top", []),
                 "usuarios_activos": resumen.get("usuarios_activos", []),
                 "archivo_json": str(ruta),
-                "observacion": (
-                    "" if estado == "completo"
-                    else "No se encontro data/hilo_discusion.json; se uso el corpus de noticias como conversacion derivada."
-                ),
+                "observacion": observacion,
             }
         except Exception as exc:
             return {

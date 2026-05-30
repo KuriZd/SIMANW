@@ -53,6 +53,21 @@ def test_qa_service_returns_string():
     assert answer
 
 
+def test_ac6_contextual_chatbot_is_integrated_in_pipeline():
+    service = SIMANWAppService()
+    result = service.analizar_noticias("demo")
+
+    ac6 = result.evidencias_ac["AC-6"]
+
+    assert ac6["estado"] == "completo"
+    assert ac6["ejecutado_desde"] == "Search & Q&A"
+    assert ac6["interacciones"] >= 3
+    assert ac6["tiene_contexto"] is True
+    assert ac6["respuestas_contextuales"] >= 1
+    assert ac6["ultima_consulta_expandida"]
+    assert Path(ac6["archivo_json"]).exists()
+
+
 def test_graph_service_exports_files_or_reports_warning(tmp_path):
     app_service = SIMANWAppService()
     result = app_service.analizar_noticias("demo")
@@ -87,6 +102,22 @@ def test_ac8_quality_runs_before_phase2_and_feeds_clean_corpus():
     assert ac8["registros_validos"] == len(result.corpus_procesado)
     assert result.rutas["ac8_informe_json"].endswith("ac8_informe_calidad.json")
     assert Path(result.rutas["ac8_corpus_depurado"]).exists()
+
+
+def test_ac9_generates_timeline_terms_and_exportable_evidence():
+    service = SIMANWAppService()
+    result = service.analizar_noticias("demo")
+
+    ac9 = result.evidencias_ac["AC-9"]
+
+    assert ac9["estado"] in {"completo", "parcial"}
+    assert ac9["granularidad"] == "mes"
+    assert ac9["total_temas"] >= 3
+    assert "tendencias_terminos" in ac9
+    assert Path(result.rutas["tendencias_csv"]).exists()
+    assert Path(result.rutas["tendencias_png"]).exists()
+    assert Path(result.rutas["tendencias_json"]).exists()
+    assert Path(result.rutas["tendencias_conclusion_md"]).exists()
 
 
 def test_ac10_alerts_use_loaded_corpus_and_deduplicate():

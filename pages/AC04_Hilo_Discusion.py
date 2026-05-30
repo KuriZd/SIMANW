@@ -97,7 +97,11 @@ def _render_mensajes(analizador: AnalizadorHiloDiscusion) -> None:
 def _render_evolucion(analizador: AnalizadorHiloDiscusion) -> None:
     total = len(analizador.mensajes)
     ventana_max = max(2, min(10, total // 2))
-    ventana = st.slider("Ventana deslizante", 2, ventana_max, min(3, ventana_max), key="sl_ventana")
+    if ventana_max > 2:
+        ventana = st.slider("Ventana deslizante", 2, ventana_max, min(3, ventana_max), key="sl_ventana")
+    else:
+        ventana = 2
+        st.caption(f"Ventana fija = {ventana} (corpus pequeño).")
     evolucion = analizador.evolucion_sentimiento(ventana=ventana)
     st.subheader(f"Evolución del sentimiento (ventana = {ventana})")
     if evolucion:
@@ -119,7 +123,11 @@ def _render_evolucion(analizador: AnalizadorHiloDiscusion) -> None:
 def _render_subtemas(analizador: AnalizadorHiloDiscusion) -> None:
     total = len(analizador.mensajes)
     max_clusters = max(2, min(8, total // 2))
-    n_clusters = st.slider("Número de subtemas", 2, max_clusters, min(3, max_clusters), key="sl_clusters")
+    if max_clusters > 2:
+        n_clusters = st.slider("Número de subtemas", 2, max_clusters, min(3, max_clusters), key="sl_clusters")
+    else:
+        n_clusters = 2
+        st.caption(f"Subtemas fijos = {n_clusters} (corpus pequeño).")
     with st.spinner("Detectando subtemas…"):
         subtemas = analizador.detectar_subtemas(n_clusters=n_clusters)
     for cluster_id, info in subtemas.items():

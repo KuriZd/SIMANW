@@ -101,6 +101,15 @@ class TendenciasTemporales:
                     mejor = {"categoria": categoria, "periodo": periodo, "count": count, "titulos": titulos}
         return mejor
 
+    def tendencias_terminos_por_categoria(self, minimo_categorias: int = 3, n_top: int = 5) -> dict[str, dict]:
+        """Calcula terminos que aumentan o disminuyen para las categorias principales."""
+        conteos = self.conteo_por_periodo()
+        categorias = sorted(conteos, key=lambda cat: (-sum(conteos[cat].values()), cat))
+        return {
+            categoria: self.tendencia_terminos(categoria, n_top=n_top)
+            for categoria in categorias[:max(minimo_categorias, 0)]
+        }
+
     # ------------------------------------------------------------------
     # Exportación y visualización
     # ------------------------------------------------------------------
@@ -108,8 +117,17 @@ class TendenciasTemporales:
     def tabla_resumen(self) -> list[dict]:
         """Lista plana exportable: una fila por (categoria, periodo)."""
         conteos = self.conteo_por_periodo()
+        tendencias = self.tendencias_terminos_por_categoria(minimo_categorias=3)
         return [
-            {"categoria": cat, "periodo": periodo, "noticias": count}
+            {
+                "categoria": cat,
+                "periodo": periodo,
+                "noticias": count,
+                "terminos_aumentan": ", ".join(tendencias.get(cat, {}).get("aumentan", [])),
+                "terminos_disminuyen": ", ".join(tendencias.get(cat, {}).get("disminuyen", [])),
+                "primer_periodo": tendencias.get(cat, {}).get("primer_periodo") or "",
+                "ultimo_periodo": tendencias.get(cat, {}).get("ultimo_periodo") or "",
+            }
             for cat in sorted(conteos)
             for periodo, count in sorted(conteos[cat].items())
         ]
@@ -118,7 +136,18 @@ class TendenciasTemporales:
         ruta = Path(ruta)
         ruta.parent.mkdir(parents=True, exist_ok=True)
         with ruta.open("w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=["categoria", "periodo", "noticias"])
+            writer = csv.DictWriter(
+                f,
+                fieldnames=[
+                    "categoria",
+                    "periodo",
+                    "noticias",
+                    "terminos_aumentan",
+                    "terminos_disminuyen",
+                    "primer_periodo",
+                    "ultimo_periodo",
+                ],
+            )
             writer.writeheader()
             writer.writerows(self.tabla_resumen())
         return ruta
@@ -243,6 +272,60 @@ class TendenciasTemporales:
         )
         return texto
 
+    def conclusion(self) -> str:
+        """Genera una conclusión de ~una página con los hallazgos principales."""
+        conteos = self.conteo_por_periodo()
+        pico = self.pico_notable()
+        total = len(self.noticias)
+        categorias = sorted(conteos.keys())
+        periodos_globales = sorted({p for ps in conteos.values() for p in ps})
+        n_periodos = len(periodos_globales)
+        primer_p = periodos_globales[0] if periodos_globales else "N/A"
+        ultimo_p = periodos_globales[-1] if periodos_globales else "N/A"
+        gran_txt = "mensual" if self.granularidad == "mes" else "semanal"
+        resumen_cats = ", ".join(
+            f"{cat} ({sum(conteos[cat].values())} noticias)" for cat in categorias[:3]
+        )
+
+        texto = (
+            f"CONCLUSIÓN - Análisis de Tendencias Temporales del SIMANW\n"
+            f"{'=' * 55}\n\n"
+            f"El corpus analizado contiene {total} noticias distribuidas en {n_periodos} periodo(s) "
+            f"{gran_txt}(s), desde {primer_p} hasta {ultimo_p}. "
+            f"La granularidad {gran_txt} fue elegida porque permite observar ciclos editoriales "
+            f"sin fragmentar en exceso un corpus de tamaño medio; la semana sería preferible "
+            f"con miles de documentos diarios.\n\n"
+            f"Las categorías con mayor presencia son: {resumen_cats}. "
+        )
+
+        if pico["categoria"]:
+            titulos_str = "; ".join(f'"{titulo[:55]}"' for titulo in pico["titulos"][:3])
+            texto += (
+                f"\n\nEl pico más notable se registra en {pico['categoria'].upper()} "
+                f"durante {pico['periodo']}, con {pico['count']} noticia(s). "
+                f"Los títulos que explican esta concentración son: {titulos_str}. "
+                f"Esta acumulación refleja mayor actividad periodística en el tema "
+                f"durante ese periodo, posiblemente asociada a eventos, lanzamientos "
+                f"o debates de relevancia pública.\n"
+            )
+
+        for categoria, tendencia in self.tendencias_terminos_por_categoria(minimo_categorias=3).items():
+            if tendencia["aumentan"] or tendencia["disminuyen"]:
+                texto += (
+                    f"\nEn la categoría {categoria}, comparando {tendencia['primer_periodo']} "
+                    f"con {tendencia['ultimo_periodo']}, los términos con mayor incremento de frecuencia "
+                    f"son: {', '.join(tendencia['aumentan'][:3]) or 'N/A'}. "
+                    f"Los que disminuyeron: {', '.join(tendencia['disminuyen'][:3]) or 'N/A'}. "
+                    f"Este desplazamiento léxico evidencia una evolución en el enfoque editorial.\n"
+                )
+
+        texto += (
+            f"\nEn síntesis, el análisis temporal confirma que el corpus del SIMANW presenta "
+            f"variaciones temáticas observables a nivel {gran_txt}, validando la utilidad del "
+            f"módulo para monitorear la agenda informativa y detectar tendencias emergentes."
+        )
+        return texto
+
     def guardar_reporte_json(self, ruta: str | Path = "reports/tendencias_ac9.json") -> Path:
         """Exporta conteos, pico y tabla a JSON."""
         import json
@@ -253,8 +336,10 @@ class TendenciasTemporales:
             "granularidad": self.granularidad,
             "total_noticias": len(self.noticias),
             "conteo_por_periodo": self.conteo_por_periodo(),
+            "tendencias_terminos": self.tendencias_terminos_por_categoria(minimo_categorias=3),
             "tabla_resumen": self.tabla_resumen(),
             "pico_notable": self.pico_notable(),
+            "conclusion": self.conclusion(),
         }
         with ruta.open("w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)

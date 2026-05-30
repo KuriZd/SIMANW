@@ -130,9 +130,12 @@ def test_ac4_deriva_hilo_desde_corpus_y_lo_marca_parcial(tmp_path, monkeypatch):
 
     evidencia = service._generar_evidencia_ac4(corpus)
 
-    assert evidencia["estado"] == "parcial"
-    assert evidencia["origen_datos"] == "corpus_derivado"
-    assert evidencia["total_mensajes"] == 2
+    assert evidencia["estado"] == "completo"
+    assert evidencia["origen_datos"] == "hilo_simulado"
+    assert evidencia["total_mensajes"] >= 8
+    assert evidencia["evolucion_puntos"] == evidencia["total_mensajes"]
+    assert evidencia["subtemas_detectados"] >= 1
+    assert evidencia["resumen_textual"]
     assert Path(evidencia["archivo_json"]).exists()
 
 

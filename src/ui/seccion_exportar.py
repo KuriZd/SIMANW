@@ -260,6 +260,8 @@ ARTIFACT_KEYS = [
     ("resultados_ac5_json", "AC-5 evaluacion IRS"),
     ("tendencias_csv", "AC-9 tendencias CSV"),
     ("tendencias_png", "AC-9 tendencias PNG"),
+    ("tendencias_json", "AC-9 reporte JSON"),
+    ("tendencias_conclusion_md", "AC-9 conclusion Markdown"),
     ("ac10_consultas", "AC-10 consultas"),
     ("ac10_historial", "AC-10 historial"),
     ("ac11_csv", "AC-11 usabilidad CSV"),

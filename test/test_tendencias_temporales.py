@@ -53,6 +53,16 @@ def test_tendencia_terminos_detecta_cambios():
     assert isinstance(tend["disminuyen"], list)
 
 
+def test_tendencias_terminos_cubre_al_menos_tres_categorias():
+    analizador = TendenciasTemporales(granularidad="mes")
+    analizador.cargar_noticias(NOTICIAS_AC9_DEMO)
+
+    tendencias = analizador.tendencias_terminos_por_categoria(minimo_categorias=3)
+
+    assert len(tendencias) >= 3
+    assert all({"aumentan", "disminuyen", "primer_periodo", "ultimo_periodo"} <= set(data) for data in tendencias.values())
+
+
 def test_tendencia_terminos_categoria_inexistente():
     analizador = TendenciasTemporales(granularidad="mes")
     analizador.cargar_noticias(_noticias_basicas())
@@ -93,6 +103,22 @@ def test_exportar_csv_crea_archivo(tmp_path):
     contenido = ruta.read_text(encoding="utf-8")
     assert "categoria" in contenido
     assert "tecnologia" in contenido
+    assert "terminos_aumentan" in contenido
+    assert "terminos_disminuyen" in contenido
+
+
+def test_exporta_reporte_json_y_conclusion_markdown(tmp_path):
+    analizador = TendenciasTemporales(granularidad="mes")
+    analizador.cargar_noticias(NOTICIAS_AC9_DEMO)
+
+    ruta_json = analizador.guardar_reporte_json(tmp_path / "tendencias.json")
+    ruta_md = analizador.guardar_conclusion_markdown(tmp_path / "conclusion.md")
+
+    contenido_json = ruta_json.read_text(encoding="utf-8")
+    contenido_md = ruta_md.read_text(encoding="utf-8")
+    assert "tendencias_terminos" in contenido_json
+    assert "CONCLUSIÓN" in contenido_md
+    assert "pico más notable" in contenido_md
 
 
 def test_visualizacion_texto_no_vacia():

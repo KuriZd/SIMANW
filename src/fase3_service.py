@@ -143,6 +143,7 @@ class Fase3Service:
                     tendencias_data = {
                         "granularidad": tend.granularidad,
                         "tabla": tabla,
+                        "tendencias_terminos": tend.tendencias_terminos_por_categoria(minimo_categorias=3),
                         "conclusion": tend.conclusion(),
                         "pico": tend.pico_notable(),
                         "texto_visual": tend.visualizacion_texto(),
@@ -346,6 +347,34 @@ class Fase3Service:
         try:
             Path(ruta).parent.mkdir(parents=True, exist_ok=True)
             return tend_obj.exportar_png(ruta)
+        except Exception:
+            return None
+
+    def exportar_tendencias_json(
+        self,
+        analisis: dict,
+        ruta: str | Path = "reports/tendencias_ac9.json",
+    ) -> Path | None:
+        tend_obj = analisis.get("tendencias", {}).get("_tendencias_obj")
+        if tend_obj is None:
+            return None
+        try:
+            Path(ruta).parent.mkdir(parents=True, exist_ok=True)
+            return tend_obj.guardar_reporte_json(ruta)
+        except Exception:
+            return None
+
+    def exportar_tendencias_markdown(
+        self,
+        analisis: dict,
+        ruta: str | Path = "reports/conclusion_tendencias_ac9.md",
+    ) -> Path | None:
+        tend_obj = analisis.get("tendencias", {}).get("_tendencias_obj")
+        if tend_obj is None:
+            return None
+        try:
+            Path(ruta).parent.mkdir(parents=True, exist_ok=True)
+            return tend_obj.guardar_conclusion_markdown(ruta)
         except Exception:
             return None
 

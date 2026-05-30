@@ -205,9 +205,11 @@ class SeccionResultados(ctk.CTkFrame):
                 f"Origen: {evidencia.get('origen_datos', '-')}\n"
                 f"Mensajes: {evidencia.get('total_mensajes', 0)} | Participantes: {evidencia.get('participantes', 0)}\n"
                 f"Tono: {evidencia.get('tono', '-')} ({_fmt_signed(evidencia.get('sentimiento_promedio'))})\n"
-                f"Subtemas: {evidencia.get('subtemas_detectados', 0)}\n"
+                f"Subtemas: {evidencia.get('subtemas_detectados', 0)} | Evolucion: {evidencia.get('evolucion_puntos', 0)} puntos\n"
                 f"Archivo: {evidencia.get('archivo_json', '-')}"
             )
+            if evidencia.get("resumen_textual"):
+                texto += f"\nResumen: {evidencia['resumen_textual']}"
             if evidencia.get("observacion"):
                 texto += f"\nNota: {evidencia['observacion']}"
 
