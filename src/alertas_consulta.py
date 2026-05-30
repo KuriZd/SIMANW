@@ -73,7 +73,7 @@ class SistemaAlertasConsulta:
         ruta = Path(ruta)
         ruta.parent.mkdir(parents=True, exist_ok=True)
         ruta.write_text(
-            json.dumps([asdict(c) for c in self.consultas], ensure_ascii=False, indent=2),
+            json.dumps([asdict(consulta) for consulta in self.consultas], ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
         return ruta
@@ -92,11 +92,11 @@ class SistemaAlertasConsulta:
         return (
             "El sistema evita alertas duplicadas usando una llave compuesta por el nombre de la "
             "consulta guardada y el identificador estable de la noticia. El identificador se toma "
-            "de la URL cuando existe; si no hay URL, se usa el campo id y finalmente el titulo "
+            "de la URL cuando existe; si no hay URL, se usa el campo id y finalmente el título "
             "normalizado como respaldo. Antes de registrar una alerta nueva se revisa si esa llave "
-            "ya fue emitida en el historial. Asi, una misma noticia puede activar consultas "
+            "ya fue emitida en el historial. Así, una misma noticia puede activar consultas "
             "distintas, pero la misma consulta no vuelve a alertar sobre la misma noticia aunque "
-            "el indice sea reprocesado o la noticia reaparezca en otra ejecucion."
+            "el índice sea reprocesado o la noticia reaparezca en otra ejecución."
         )
 
     def guardar_reporte_markdown(self, ruta: str | Path = "reports/alertas_ac10.md") -> Path:
@@ -113,11 +113,11 @@ class SistemaAlertasConsulta:
             "## Consultas registradas",
             "",
         ]
-        for c in self.consultas:
-            lineas.append(f"- **{c.nombre}**: `{c.expresion}` (desde {c.fecha_creacion})")
+        for consulta in self.consultas:
+            lineas.append(f"- **{consulta.nombre}**: `{consulta.expresion}` (desde {consulta.fecha_creacion})")
         lineas += [
             "",
-            "## Mecanismo de deduplicacion",
+            "## Mecanismo de deduplicación",
             "",
             self.documentar_deduplicacion(),
             "",
@@ -127,10 +127,11 @@ class SistemaAlertasConsulta:
         if self.historial_alertas:
             for alerta in self.historial_alertas:
                 lineas.append(
-                    f"- [{alerta['titulo']}]({alerta['url']}) — consulta: **{alerta['consulta']}** ({alerta['marca_tiempo']})"
+                    f"- [{alerta['titulo']}]({alerta['url']}) - consulta: "
+                    f"**{alerta['consulta']}** ({alerta['marca_tiempo']})"
                 )
         else:
-            lineas.append("_Sin alertas generadas en esta ejecucion._")
+            lineas.append("_Sin alertas generadas en esta ejecución._")
         ruta.write_text("\n".join(lineas), encoding="utf-8")
         return ruta
 

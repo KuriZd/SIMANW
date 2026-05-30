@@ -39,3 +39,19 @@ def test_documentacion_deduplicacion_menciona_llave_compuesta():
 
     assert "consulta" in texto.lower()
     assert "noticia" in texto.lower()
+
+
+def test_reporte_markdown_documenta_consultas_alertas_y_deduplicacion(tmp_path):
+    sistema = SistemaAlertasConsulta(consultas_demo())
+    sistema.procesar_noticias_nuevas(noticias_nuevas_demo())
+
+    ruta = sistema.guardar_reporte_markdown(tmp_path / "alertas_ac10.md")
+    texto = ruta.read_text(encoding="utf-8")
+
+    assert "Consultas activas" in texto
+    assert "Alertas generadas" in texto
+    assert "Mecanismo de deduplicación" in texto
+    assert "consulta guardada" in texto
+    assert "noticia" in texto
+    assert "Ã" not in texto
+    assert "â" not in texto

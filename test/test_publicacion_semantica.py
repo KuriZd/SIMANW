@@ -8,6 +8,7 @@ from src.knowledge_graph import (
     QUERY_AC13_SENTIMIENTO_POR_CATEGORIA,
     KnowledgeGraphSIMANW,
 )
+from src.fase6_service import Fase6Service
 
 
 def _kg_ac13():
@@ -101,3 +102,18 @@ def test_fragmento_jsonld_se_puede_formatear_para_ui():
     assert isinstance(fragmento, dict)
     assert '"@type": "schema:NewsArticle"' in texto
     assert texto.splitlines()
+
+
+def test_publicacion_semantica_exporta_nota_de_reutilizacion():
+    service = Fase6Service()
+    service.kg = _kg_ac13()
+
+    evidencia = service.publicar_semanticamente()
+
+    assert evidencia["enlaces_externos_creados"] >= 5
+    assert "criterio_enlace" in evidencia
+    assert "reutilizacion" in evidencia["archivos"]
+    ruta = evidencia["archivos"]["reutilizacion"]
+    texto = open(ruta, encoding="utf-8").read()
+    assert "descubrir y reutilizar" in texto.lower()
+    assert "criterio de enlace externo" in texto.lower()

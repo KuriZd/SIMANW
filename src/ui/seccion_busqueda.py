@@ -141,6 +141,9 @@ class SeccionBusquedaQA(ctk.CTkFrame):
             f"Alertas: {evidencia.get('alertas_generadas', 0)} | "
             f"Historial: {evidencia.get('historial_alertas', 0)} | "
             f"Duplicados evitados: {evidencia.get('alertas_duplicadas_evitadas', 0)}\n"
+            f"Sin noticias nuevas: {evidencia.get('noticias_procesadas_sin_nuevas', 0)} docs | "
+            f"Con noticias nuevas: {evidencia.get('noticias_procesadas_con_nuevas', 0)} docs | "
+            f"Reproceso duplicado: {evidencia.get('alertas_segunda_ejecucion', 0)} alertas\n"
             f"{', '.join(consultas[:5]) or 'Sin consultas registradas'}"
         )
 

@@ -230,6 +230,26 @@ python main_actividades_complementarias.py
 
 Esto ejecuta `ejecutar_ac13()` y regenera los archivos RDF en `data/`.
 
+### Activar enriquecimiento online con Wikidata
+
+Por defecto SIMANW puede ejecutar el Knowledge Graph en modo offline para que la demo sea reproducible sin depender de red. Para AC-7, si se quiere consultar Wikidata realmente y registrar QIDs/enlaces externos obtenidos desde el endpoint SPARQL, activa la variable de entorno antes de abrir la app:
+
+```powershell
+$env:SIMANW_WIKIDATA_ONLINE = "1"
+python app_desktop.py
+```
+
+En la app, ejecuta el pipeline desde `Load / Analyze News` y revisa `Knowledge Graph` o `Academic Evidence`. La evidencia debe mostrar `wikidata_online: True`, el endpoint `https://query.wikidata.org/sparql`, entidades evaluadas, enlaces creados y archivos como `data/enlaces_wikidata_ac7.json`.
+
+Para volver al modo offline en la misma terminal:
+
+```powershell
+Remove-Item Env:\SIMANW_WIKIDATA_ONLINE -ErrorAction SilentlyContinue
+python app_desktop.py
+```
+
+Si el modo online esta desactivado o no hay conexion, AC-7 se reporta como parcial/offline y no se debe presentar como enriquecimiento real de Wikidata.
+
 ### Prefijos principales
 
 | Prefijo | URI |

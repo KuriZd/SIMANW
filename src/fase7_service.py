@@ -57,13 +57,21 @@ class Fase7Service:
     def generar_manifiesto(self, resultado) -> Path:
         self.run_dir.mkdir(parents=True, exist_ok=True)
         archivos = {Path(ruta).name: ruta for ruta in resultado.archivos_generados if ruta}
+        rutas = getattr(resultado, "reporte_info", {}).get("rutas", {})
+        fuente_noticias = (
+            rutas.get("noticias_json")
+            or rutas.get("ac8_corpus_depurado")
+            or rutas.get("corpus_json")
+            or "fuente-no-registrada"
+        )
         if TrazabilidadPipeline is not None:
-            traza = TrazabilidadPipeline("desktop-app")
-            traza.registrar_etapa("extraccion", 0, len(resultado.noticias), "data/raw/noticias.json")
-            traza.registrar_etapa("nlp", len(resultado.noticias), len(resultado.corpus_procesado), "data/processed/corpus_procesado.json")
-            traza.registrar_etapa("analisis", len(resultado.corpus_procesado), len(resultado.corpus_procesado), "outputs/analisis/reporte_analisis.json")
-            traza.registrar_etapa("grafo", len(resultado.corpus_procesado), resultado.grafo_info.get("total_triples", 0), "outputs/grafo/simanw_graph.ttl")
-            traza.registrar_etapa("reporte", len(resultado.corpus_procesado), 1, "outputs/reportes/reporte_final.md")
+            traza = TrazabilidadPipeline(fuente_noticias)
+            traza.registrar_etapa("extraccion", 0, len(resultado.noticias), rutas.get("noticias_json", "data/noticias_extraidas.json"))
+            traza.registrar_etapa("procesamiento", len(resultado.noticias), len(resultado.corpus_procesado), rutas.get("corpus_json", "data/processed/corpus_procesado.json"))
+            traza.registrar_etapa("analisis", len(resultado.corpus_procesado), len(resultado.corpus_procesado), rutas.get("analisis_json", "data/resultados_fase3.json"))
+            traza.registrar_etapa("busqueda", len(resultado.corpus_procesado), len(resultado.resultados_busqueda), rutas.get("resultados_ac5_json", "indice_busqueda_en_memoria"))
+            traza.registrar_etapa("grafo", len(resultado.corpus_procesado), resultado.grafo_info.get("total_triples", 0), rutas.get("grafo_ttl", "outputs/grafo/simanw_graph.ttl"))
+            traza.registrar_etapa("reporte", len(resultado.corpus_procesado), 1, rutas.get("reporte_final", "outputs/reportes/reporte_final.md"))
             return traza.guardar_manifiesto(self.run_dir / "manifest.json", archivos)
 
         data = {

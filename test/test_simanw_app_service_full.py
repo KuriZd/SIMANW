@@ -129,7 +129,17 @@ def test_ac10_alerts_use_loaded_corpus_and_deduplicate():
 
     assert ac10["numero_consultas"] >= 5
     assert ac10["ejecucion_sin_noticias_nuevas"] == 0
+    assert ac10["noticias_procesadas_sin_nuevas"] == 0
+    assert ac10["noticias_procesadas_con_nuevas"] >= 5
+    assert ac10["alertas_primera_ejecucion"] == ac10["alertas_generadas"]
+    assert ac10["alertas_segunda_ejecucion"] == 0
+    assert ac10["alertas_duplicadas_evitadas"] == ac10["alertas_generadas"]
+    assert ac10["duplicados_documentados"] is True
+    assert "consulta" in ac10["deduplicacion"].lower()
+    assert "noticia" in ac10["deduplicacion"].lower()
     assert "historial" in ac10["archivos"]
+    assert Path(ac10["archivos"]["historial"]).exists()
+    assert Path(ac10["archivos"]["reporte_md"]).exists()
     assert rerun["alertas_duplicadas_evitadas"] >= rerun["alertas_generadas"]
 
 

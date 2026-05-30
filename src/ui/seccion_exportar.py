@@ -275,6 +275,7 @@ ARTIFACT_KEYS = [
     ("ac13_jsonld", "AC-13 JSON-LD"),
     ("ac13_validacion", "AC-13 SHACL"),
     ("ac13_glosario", "AC-13 glosario"),
+    ("ac13_reutilizacion", "AC-13 reutilizacion"),
     ("reporte_final", "Reporte final Markdown"),
     ("reporte_final_json", "Reporte final JSON"),
     ("academic_evidence", "Academic Evidence"),

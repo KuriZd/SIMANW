@@ -408,7 +408,7 @@ class SIMANWAppService:
             resultado.archivos_generados.append(str(reporte_json))
             rutas["reporte_final_json"] = str(reporte_json)
             manifiesto = self.fase7_service.generar_manifiesto(resultado)
-            log = self.fase7_service.generar_log_pipeline(self._eventos)
+            log = self.fase7_service.generar_log_pipeline(self._eventos_ac12(resultado))
             resultado.archivos_generados.extend([str(manifiesto), str(log)])
             rutas["manifest"] = str(manifiesto)
             rutas["pipeline_log"] = str(log)
@@ -617,6 +617,7 @@ class SIMANWAppService:
         noticias_alertas = [self._noticia_para_alerta(item, idx) for idx, item in enumerate(corpus, start=1)]
         alertas = sistema.procesar_noticias_nuevas(noticias_alertas)
         repetidas = sistema.procesar_noticias_nuevas(noticias_alertas)
+        duplicadas_evitadas = max(len(alertas) - len(repetidas), 0)
         self.alertas_consulta = sistema
 
         ruta_consultas = sistema.guardar_consultas("data/ac10_consultas_guardadas.json")
@@ -636,9 +637,14 @@ class SIMANWAppService:
             "numero_consultas": len(sistema.consultas),
             "historial_alertas": len(sistema.historial_alertas),
             "alertas_generadas": len(alertas),
-            "alertas_duplicadas_evitadas": max(len(noticias_alertas) * len(sistema.consultas) - len(repetidas), 0),
+            "alertas_primera_ejecucion": len(alertas),
+            "alertas_segunda_ejecucion": len(repetidas),
+            "alertas_duplicadas_evitadas": duplicadas_evitadas,
             "ejecucion_sin_noticias_nuevas": len(sin_noticias),
             "ejecucion_con_noticias_nuevas": len(alertas),
+            "noticias_procesadas_sin_nuevas": 0,
+            "noticias_procesadas_con_nuevas": len(noticias_alertas),
+            "duplicados_documentados": True,
             "deduplicacion": sistema.documentar_deduplicacion(),
             "archivos": {
                 "consultas": str(ruta_consultas),
@@ -679,8 +685,15 @@ class SIMANWAppService:
         }
 
     def _ejecutar_ac12(self, resultado: SIMANWAppResult, manifiesto: Path, log: Path) -> dict:
-        traza = TrazabilidadPipeline("desktop-app")
-        checklist = traza.guardar_checklist("reports/checklist_ac12.md", "Alumno SIMANW")
+        rutas = resultado.reporte_info.get("rutas", {})
+        fuente_noticias = (
+            rutas.get("noticias_json")
+            or rutas.get("ac8_corpus_depurado")
+            or rutas.get("corpus_json")
+            or "fuente-no-registrada"
+        )
+        traza = TrazabilidadPipeline(fuente_noticias)
+        checklist = traza.guardar_checklist("reports/checklist_ac12.md", "KuriZd")
         limitaciones = traza.guardar_limitaciones("reports/limitaciones_ac12.md")
         documentos_por_etapa = {
             "extraccion": len(resultado.noticias),
@@ -711,6 +724,62 @@ class SIMANWAppService:
             },
             "archivo_json": str(manifiesto),
         }
+
+    @staticmethod
+    def _eventos_ac12(resultado: SIMANWAppResult) -> list[dict]:
+        rutas = resultado.reporte_info.get("rutas", {})
+        ahora = datetime.now(timezone.utc).isoformat()
+        eventos = [
+            {
+                "etapa": "rastreo",
+                "documentos_entrada": 0,
+                "documentos_salida": len(resultado.noticias),
+                "artefacto": rutas.get("noticias_json", ""),
+                "marca_tiempo": ahora,
+                "estado": resultado.estado_pipeline.extraction,
+            },
+            {
+                "etapa": "procesamiento",
+                "documentos_entrada": len(resultado.noticias),
+                "documentos_salida": len(resultado.corpus_procesado),
+                "artefacto": rutas.get("corpus_json", ""),
+                "marca_tiempo": ahora,
+                "estado": resultado.estado_pipeline.nlp,
+            },
+            {
+                "etapa": "analisis",
+                "documentos_entrada": len(resultado.corpus_procesado),
+                "documentos_salida": len(resultado.corpus_procesado) if resultado.analisis else 0,
+                "artefacto": rutas.get("analisis_json", ""),
+                "marca_tiempo": ahora,
+                "estado": resultado.estado_pipeline.analysis,
+            },
+            {
+                "etapa": "busqueda",
+                "documentos_entrada": len(resultado.corpus_procesado),
+                "documentos_salida": len(resultado.resultados_busqueda),
+                "artefacto": rutas.get("resultados_ac5_json", "indice_busqueda_en_memoria"),
+                "marca_tiempo": ahora,
+                "estado": resultado.estado_pipeline.search,
+            },
+            {
+                "etapa": "grafo",
+                "documentos_entrada": len(resultado.corpus_procesado),
+                "documentos_salida": int(resultado.grafo_info.get("total_triples", 0) or 0),
+                "artefacto": rutas.get("grafo_ttl", ""),
+                "marca_tiempo": ahora,
+                "estado": resultado.estado_pipeline.graph,
+            },
+            {
+                "etapa": "reporte",
+                "documentos_entrada": len(resultado.corpus_procesado),
+                "documentos_salida": 1 if rutas.get("reporte_final") else 0,
+                "artefacto": rutas.get("reporte_final", ""),
+                "marca_tiempo": ahora,
+                "estado": resultado.estado_pipeline.reports,
+            },
+        ]
+        return eventos
 
     def _generar_evidencia_ac2(self, corpus: list[dict]) -> dict:
         textos = [

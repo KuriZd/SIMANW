@@ -113,12 +113,30 @@ class Fase6Service:
         ruta_fragmento = Path("data/ac13_fragmento_noticia.jsonld")
         ruta_validacion = Path("reports/validacion_shacl_ac13.json")
         ruta_consultas = Path("reports/consultas_sparql_ac13.json")
-        for ruta in (ruta_glosario, ruta_fragmento, ruta_validacion, ruta_consultas):
+        ruta_reutilizacion = Path("reports/reutilizacion_datos_ac13.md")
+        for ruta in (ruta_glosario, ruta_fragmento, ruta_validacion, ruta_consultas, ruta_reutilizacion):
             ruta.parent.mkdir(parents=True, exist_ok=True)
         ruta_glosario.write_text(json.dumps(glosario, ensure_ascii=False, indent=2), encoding="utf-8")
         ruta_fragmento.write_text(json.dumps(fragmento, ensure_ascii=False, indent=2), encoding="utf-8")
         ruta_validacion.write_text(json.dumps(validacion, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
         ruta_consultas.write_text(json.dumps(consultas, ensure_ascii=False, indent=2), encoding="utf-8")
+        ruta_reutilizacion.write_text(
+            "\n".join(
+                [
+                    "# AC-13: Descubrimiento y reutilizacion de datos",
+                    "",
+                    self.kg.nota_reutilizacion_datos(),
+                    "",
+                    "## Criterio de enlace externo",
+                    "",
+                    "Los enlaces de clases usan equivalencias con vocabularios ampliamente adoptados "
+                    "cuando la semantica coincide, como schema:NewsArticle y foaf:Person. Los enlaces "
+                    "de categorias usan skos:closeMatch porque representan correspondencias tematicas "
+                    "aproximadas con Wikidata o DBpedia y no identidad estricta.",
+                ]
+            ),
+            encoding="utf-8",
+        )
 
         violaciones = validacion.get("violaciones", [])
         return {
@@ -132,8 +150,10 @@ class Fase6Service:
             "correcciones_aplicadas": "Sin violaciones formales detectadas." if validacion.get("conforme") else "Revisar reporte de validacion.",
             "consultas_sparql_ejecutadas": {clave: len(valor) for clave, valor in consultas.items()},
             "enlaces_externos_creados": len(enlaces),
+            "criterio_enlace": "owl:equivalentClass para clases equivalentes; skos:closeMatch para categorias tematicas aproximadas.",
             "fragmento_jsonld": fragmento,
             "glosario_generado": str(ruta_glosario),
+            "nota_reutilizacion": str(ruta_reutilizacion),
             "archivos": {
                 "turtle": str(rutas_rdf["turtle"]),
                 "jsonld": str(rutas_rdf["json-ld"]),
@@ -141,6 +161,7 @@ class Fase6Service:
                 "glosario": str(ruta_glosario),
                 "fragmento_jsonld": str(ruta_fragmento),
                 "consultas_sparql": str(ruta_consultas),
+                "reutilizacion": str(ruta_reutilizacion),
             },
             "archivo_json": str(ruta_validacion),
         }

@@ -189,13 +189,20 @@ def _metricas_texto(data: dict) -> str:
         "consultas_reales",
         "historial_alertas",
         "alertas_generadas",
+        "alertas_primera_ejecucion",
+        "alertas_segunda_ejecucion",
         "alertas_duplicadas_evitadas",
+        "noticias_procesadas_sin_nuevas",
+        "noticias_procesadas_con_nuevas",
+        "duplicados_documentados",
         "participantes",
         "datos",
         "version_proyecto",
         "fuente_noticias",
         "violaciones_encontradas",
         "enlaces_externos_creados",
+        "criterio_enlace",
+        "nota_reutilizacion",
     ]
     partes = [f"{clave}: {data[clave]}" for clave in claves if clave in data]
     return " | ".join(partes) if partes else "Metricas: sin metricas registradas"
