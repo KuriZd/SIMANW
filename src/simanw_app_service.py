@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 from urllib.parse import urlparse
+import re
+import unicodedata
 
 from src.exportador import guardar_json
 from src.alertas_consulta import ConsultaGuardada, SistemaAlertasConsulta, consultas_demo
@@ -199,6 +201,13 @@ class SIMANWAppService:
                 if ruta_nube_ac2:
                     rutas["nube_ac2_png"] = ruta_nube_ac2
                     archivos.append(ruta_nube_ac2)
+                ruta_nubes_cat = evidencia_ac2.get("archivo_nubes_categoria_json")
+                if ruta_nubes_cat:
+                    rutas["nubes_ac2_categorias"] = ruta_nubes_cat
+                    archivos.append(ruta_nubes_cat)
+                for categoria, ruta_cat in evidencia_ac2.get("archivos_nube_categoria", {}).items():
+                    rutas[f"nube_ac2_categoria_{_slug_archivo(categoria)}"] = ruta_cat
+                    archivos.append(ruta_cat)
             evidencia_ac4 = self._generar_evidencia_ac4(corpus)
             if evidencia_ac4:
                 evidencias_ac["AC-4"] = evidencia_ac4
@@ -783,13 +792,21 @@ class SIMANWAppService:
 
     def _generar_evidencia_ac2(self, corpus: list[dict]) -> dict:
         textos = [
-            {"titulo": item.get("titulo", f"Documento {idx + 1}"), "texto": item.get("texto_original", "")}
+            {
+                "titulo": item.get("titulo", f"Documento {idx + 1}"),
+                "texto": item.get("texto_original", ""),
+                "categoria": _categoria_ac2(item),
+            }
             for idx, item in enumerate(corpus)
             if len((item.get("texto_original") or "").split()) >= 20
         ]
         if not textos and corpus:
             textos = [
-                {"titulo": item.get("titulo", f"Documento {idx + 1}"), "texto": item.get("texto_original", "")}
+                {
+                    "titulo": item.get("titulo", f"Documento {idx + 1}"),
+                    "texto": item.get("texto_original", ""),
+                    "categoria": _categoria_ac2(item),
+                }
                 for idx, item in enumerate(corpus[:3])
                 if (item.get("texto_original") or "").strip()
             ]
@@ -801,7 +818,10 @@ class SIMANWAppService:
             }
 
         analizador = AnalisisDiscurso()
-        analisis_textos = [analizador.analizar(item["texto"], item["titulo"]) for item in textos[:5]]
+        textos_ac2 = textos[:5]
+        analisis_textos = [analizador.analizar(item["texto"], item["titulo"]) for item in textos_ac2]
+        for item, analisis in zip(textos_ac2, analisis_textos):
+            analisis["categoria"] = item.get("categoria", "sin_categoria")
         comparativa = analizador.comparar_textos(analisis_textos)
         ruta = "data/analisis_ac2.json"
         ruta_nube = "data/nube_ac2.png"
@@ -811,6 +831,7 @@ class SIMANWAppService:
             for token in analisis.get("_tokens_filtrados", [])
         ]
         nube_generada = generar_nube_palabras(tokens_nube, ruta_nube) if tokens_nube else False
+        nubes_categoria = self._generar_nubes_ac2_por_categoria(textos_ac2, analisis_textos)
         AnalisisDiscurso.guardar_json(ruta, analisis_textos, comparativa)
         total_unigramas = sum(len(a.get("top_unigramas", [])) for a in analisis_textos)
         total_bigramas = sum(len(a.get("top_bigramas", [])) for a in analisis_textos)
@@ -829,8 +850,45 @@ class SIMANWAppService:
             ),
             "archivo_json": ruta,
             "archivo_nube": ruta_nube if nube_generada else "",
+            "archivos_nube_categoria": nubes_categoria.get("archivos", {}),
+            "archivo_nubes_categoria_json": nubes_categoria.get("archivo_json", ""),
+            "nubes_categoria_generadas": len(nubes_categoria.get("archivos", {})),
             "nube_generada": nube_generada,
         }
+
+    @staticmethod
+    def _generar_nubes_ac2_por_categoria(textos: list[dict], analisis_textos: list[dict]) -> dict:
+        tokens_por_categoria: dict[str, list[str]] = {}
+        for item, analisis in zip(textos, analisis_textos):
+            if analisis.get("estado") != "ok":
+                continue
+            categoria = str(item.get("categoria") or analisis.get("categoria") or "sin_categoria")
+            tokens_por_categoria.setdefault(categoria, []).extend(analisis.get("_tokens_filtrados", []))
+
+        archivos: dict[str, str] = {}
+        for categoria, tokens in sorted(tokens_por_categoria.items()):
+            if len(tokens) < 5:
+                continue
+            ruta_categoria = f"data/nube_ac2_{_slug_archivo(categoria)}.png"
+            if generar_nube_palabras(tokens, ruta_categoria):
+                archivos[categoria] = ruta_categoria
+
+        ruta_manifest = "data/nubes_ac2_categorias.json"
+        Path(ruta_manifest).parent.mkdir(parents=True, exist_ok=True)
+        Path(ruta_manifest).write_text(
+            json.dumps(
+                {
+                    "actividad": "AC-2",
+                    "tipo": "nubes_por_categoria",
+                    "fecha_generacion": datetime.now(timezone.utc).isoformat(),
+                    "archivos": archivos,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        return {"archivos": archivos, "archivo_json": ruta_manifest}
 
     def _generar_evidencia_ac4(self, corpus: list[dict]) -> dict:
         ruta_hilo = Path("data/hilo_discusion.json")
@@ -1082,3 +1140,19 @@ class SIMANWAppService:
         )
         self.estado_actual = resultado
         return resultado
+
+
+def _categoria_ac2(item: dict) -> str:
+    return str(
+        item.get("categoria_predicha")
+        or item.get("categoria_original")
+        or item.get("categoria")
+        or "sin_categoria"
+    ).strip() or "sin_categoria"
+
+
+def _slug_archivo(texto: str) -> str:
+    normalizado = unicodedata.normalize("NFKD", str(texto).lower())
+    sin_acentos = "".join(caracter for caracter in normalizado if not unicodedata.combining(caracter))
+    slug = re.sub(r"[^a-z0-9]+", "_", sin_acentos).strip("_")
+    return slug or "sin_categoria"

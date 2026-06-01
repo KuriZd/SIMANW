@@ -20,6 +20,9 @@ class SeccionResultados(ctk.CTkFrame):
         self.corpus: list[dict] = list(root_app.corpus_procesado)
         self._service = Fase2Service()
         self._analisis_discurso = self._cargar_analisis_discurso()
+        self.ac2_nube_var = ctk.StringVar(value="General")
+        self._ac2_wordcloud_images: dict[str, ctk.CTkImage] = {}
+        self._ac2_nube_host = None
         self._config_treeview_style()
         self._build()
 
@@ -370,7 +373,7 @@ class SeccionResultados(ctk.CTkFrame):
         card.grid_propagate(False)
         card.grid_columnconfigure(0, weight=1)
         card.grid_columnconfigure(1, weight=1)
-        card.grid_rowconfigure(1, weight=1)
+        card.grid_rowconfigure(2, weight=1)
         ctk.CTkLabel(
             card,
             text="AC-2: nube de palabras y estadisticas de discurso",
@@ -386,20 +389,29 @@ class SeccionResultados(ctk.CTkFrame):
         if result:
             evidencia = result.evidencias_ac.get("AC-2", {})
 
-        nube_path = evidencia.get("archivo_nube") or getattr(self.root_app, "rutas_exportacion", {}).get("nube_ac2_png")
-        imagen_mostrada = self._insertar_nube_ac2(card, nube_path)
-        if not imagen_mostrada:
-            ctk.CTkLabel(
-                card,
-                text="Nube pendiente: ejecuta Load / Analyze News o revisa que wordcloud este instalado.",
-                font=FONT_META,
-                text_color=THEME["text_2"],
-                justify="left",
-                wraplength=360,
-            ).grid(row=1, column=0, sticky="nsew", padx=CARD_PADDING, pady=(0, CARD_PADDING))
+        nubes = self._nubes_ac2_disponibles(evidencia)
+        opciones = list(nubes.keys()) or ["General"]
+        if self.ac2_nube_var.get() not in opciones:
+            self.ac2_nube_var.set(opciones[0])
+        ctk.CTkOptionMenu(
+            card,
+            variable=self.ac2_nube_var,
+            values=opciones,
+            command=lambda _value: self._mostrar_nube_ac2(nubes),
+            fg_color=THEME["bg_input"],
+            button_color=THEME["border"],
+            button_hover_color=THEME["accent"],
+            text_color=THEME["text_1"],
+        ).grid(row=1, column=0, sticky="ew", padx=CARD_PADDING, pady=(0, 8))
+        self._ac2_nube_host = ctk.CTkFrame(card, fg_color=THEME["bg_input"], corner_radius=CARD_RADIUS)
+        self._ac2_nube_host.grid(row=2, column=0, sticky="nsew", padx=CARD_PADDING, pady=(0, CARD_PADDING))
+        self._ac2_nube_host.grid_columnconfigure(0, weight=1)
+        self._ac2_nube_host.grid_rowconfigure(0, weight=1)
+        self._mostrar_nube_ac2(nubes)
 
         resumen = (
             f"Textos: {len(textos)}\n"
+            f"Nubes por categoria: {len(evidencia.get('archivos_nube_categoria', {}))}\n"
             f"Bigramas: {_top_ngramas(primer.get('top_bigramas', [])) or '-'}\n"
             f"Trigramas: {_top_ngramas(primer.get('top_trigramas', [])) or '-'}\n"
             f"Riqueza por seccion: {_secciones_texto(primer.get('riqueza_por_seccion', []))}\n"
@@ -414,10 +426,38 @@ class SeccionResultados(ctk.CTkFrame):
             justify="left",
             anchor="nw",
             wraplength=430,
-        ).grid(row=1, column=1, sticky="nsew", padx=(0, CARD_PADDING), pady=(0, CARD_PADDING))
+        ).grid(row=1, column=1, rowspan=2, sticky="nsew", padx=(0, CARD_PADDING), pady=(0, CARD_PADDING))
         return card
 
-    def _insertar_nube_ac2(self, card, ruta: str | Path | None) -> bool:
+    def _nubes_ac2_disponibles(self, evidencia: dict) -> dict[str, str]:
+        rutas = getattr(self.root_app, "rutas_exportacion", {})
+        nubes: dict[str, str] = {}
+        general = evidencia.get("archivo_nube") or rutas.get("nube_ac2_png")
+        if general:
+            nubes["General"] = str(general)
+        for categoria, ruta in evidencia.get("archivos_nube_categoria", {}).items():
+            if ruta:
+                nubes[f"Categoria: {categoria}"] = str(ruta)
+        return nubes
+
+    def _mostrar_nube_ac2(self, nubes: dict[str, str]) -> None:
+        if self._ac2_nube_host is None:
+            return
+        for child in self._ac2_nube_host.winfo_children():
+            child.destroy()
+        etiqueta = self.ac2_nube_var.get()
+        ruta = nubes.get(etiqueta)
+        if not self._insertar_nube_ac2(self._ac2_nube_host, ruta, etiqueta):
+            ctk.CTkLabel(
+                self._ac2_nube_host,
+                text="Nube pendiente: ejecuta Load / Analyze News o revisa que wordcloud este instalado.",
+                font=FONT_META,
+                text_color=THEME["text_2"],
+                justify="left",
+                wraplength=360,
+            ).grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+
+    def _insertar_nube_ac2(self, host, ruta: str | Path | None, etiqueta: str = "General") -> bool:
         if not ruta:
             return False
         path = Path(ruta)
@@ -429,9 +469,10 @@ class SeccionResultados(ctk.CTkFrame):
             return False
         try:
             image = Image.open(path)
-            self._ac2_wordcloud_image = ctk.CTkImage(light_image=image, dark_image=image, size=(360, 180))
-            ctk.CTkLabel(card, text="", image=self._ac2_wordcloud_image).grid(
-                row=1, column=0, sticky="nsew", padx=CARD_PADDING, pady=(0, CARD_PADDING)
+            image_ref = ctk.CTkImage(light_image=image, dark_image=image, size=(360, 180))
+            self._ac2_wordcloud_images[etiqueta] = image_ref
+            ctk.CTkLabel(host, text="", image=image_ref).grid(
+                row=0, column=0, sticky="nsew", padx=10, pady=10
             )
             return True
         except Exception:

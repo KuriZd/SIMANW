@@ -255,6 +255,7 @@ ARTIFACT_KEYS = [
     ("ac8_rechazados", "AC-8 rechazados"),
     ("analisis_ac2_json", "AC-2 analisis de discurso"),
     ("nube_ac2_png", "AC-2 nube de palabras"),
+    ("nubes_ac2_categorias", "AC-2 nubes por categoria"),
     ("resultados_ac3_json", "AC-3 clasificacion"),
     ("analisis_ac4_json", "AC-4 analisis de hilo"),
     ("resultados_ac5_json", "AC-5 evaluacion IRS"),

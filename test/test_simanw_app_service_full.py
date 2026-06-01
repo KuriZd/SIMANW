@@ -21,6 +21,10 @@ def test_simanw_app_service_demo_pipeline_runs_successfully():
     assert result.estado_pipeline.search == "completed"
     assert "AC-2" in result.evidencias_ac
     assert result.evidencias_ac["AC-2"]["archivo_json"].endswith("analisis_ac2.json")
+    assert "archivos_nube_categoria" in result.evidencias_ac["AC-2"]
+    assert result.evidencias_ac["AC-2"]["archivo_nubes_categoria_json"].endswith("nubes_ac2_categorias.json")
+    assert Path(result.evidencias_ac["AC-2"]["archivo_nubes_categoria_json"]).exists()
+    assert "nubes_ac2_categorias" in result.rutas
     assert "AC-3" in result.evidencias_ac
     assert result.evidencias_ac["AC-3"]["estado"] in {"completo", "parcial", "pendiente"}
     assert "AC-5" in result.evidencias_ac
