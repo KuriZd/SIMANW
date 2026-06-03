@@ -1,0 +1,122 @@
+[
+  {
+    "titulo": "Noticia real simulada 1",
+    "resumen": "Contenido extraido de una pagina con paginacion.",
+    "url": "https://ejemplo-noticias.com/noticia/1",
+    "pagina_origen": "https://ejemplo-noticias.com/noticias?page=1"
+  },
+  {
+    "titulo": "Noticia real simulada 2",
+    "resumen": "Contenido extraido de una pagina con paginacion.",
+    "url": "https://ejemplo-noticias.com/noticia/2",
+    "pagina_origen": "https://ejemplo-noticias.com/noticias?page=1"
+  },
+  {
+    "titulo": "Noticia real simulada 3",
+    "resumen": "Contenido extraido de una pagina con paginacion.",
+    "url": "https://ejemplo-noticias.com/noticia/3",
+    "pagina_origen": "https://ejemplo-noticias.com/noticias?page=1"
+  },
+  {
+    "titulo": "Noticia real simulada 4",
+    "resumen": "Contenido extraido de una pagina con paginacion.",
+    "url": "https://ejemplo-noticias.com/noticia/4",
+    "pagina_origen": "https://ejemplo-noticias.com/noticias?page=1"
+  },
+  {
+    "titulo": "Noticia real simulada 5",
+    "resumen": "Contenido extraido de una pagina con paginacion.",
+    "url": "https://ejemplo-noticias.com/noticia/5",
+    "pagina_origen": "https://ejemplo-noticias.com/noticias?page=1"
+  },
+  {
+    "titulo": "Noticia real simulada 6",
+    "resumen": "Contenido extraido de una pagina con paginacion.",
+    "url": "https://ejemplo-noticias.com/noticia/6",
+    "pagina_origen": "https://ejemplo-noticias.com/noticias?page=2"
+  },
+  {
+    "titulo": "Noticia real simulada 7",
+    "resumen": "Contenido extraido de una pagina con paginacion.",
+    "url": "https://ejemplo-noticias.com/noticia/7",
+    "pagina_origen": "https://ejemplo-noticias.com/noticias?page=2"
+  },
+  {
+    "titulo": "Noticia real simulada 8",
+    "resumen": "Contenido extraido de una pagina con paginacion.",
+    "url": "https://ejemplo-noticias.com/noticia/8",
+    "pagina_origen": "https://ejemplo-noticias.com/noticias?page=2"
+  },
+  {
+    "titulo": "Noticia real simulada 9",
+    "resumen": "Contenido extraido de una pagina con paginacion.",
+    "url": "https://ejemplo-noticias.com/noticia/9",
+    "pagina_origen": "https://ejemplo-noticias.com/noticias?page=2"
+  },
+  {
+    "titulo": "Noticia real simulada 10",
+    "resumen": "Contenido extraido de una pagina con paginacion.",
+    "url": "https://ejemplo-noticias.com/noticia/10",
+    "pagina_origen": "https://ejemplo-noticias.com/noticias?page=2"
+  },
+  {
+    "titulo": "Noticia real simulada 11",
+    "resumen": "Contenido extraido de una pagina con paginacion.",
+    "url": "https://ejemplo-noticias.com/noticia/11",
+    "pagina_origen": "https://ejemplo-noticias.com/noticias?page=3"
+  },
+  {
+    "titulo": "Noticia real simulada 12",
+    "resumen": "Contenido extraido de una pagina con paginacion.",
+    "url": "https://ejemplo-noticias.com/noticia/12",
+    "pagina_origen": "https://ejemplo-noticias.com/noticias?page=3"
+  },
+  {
+    "titulo": "Noticia real simulada 13",
+    "resumen": "Contenido extraido de una pagina con paginacion.",
+    "url": "https://ejemplo-noticias.com/noticia/13",
+    "pagina_origen": "https://ejemplo-noticias.com/noticias?page=3"
+  },
+  {
+    "titulo": "Noticia real simulada 14",
+    "resumen": "Contenido extraido de una pagina con paginacion.",
+    "url": "https://ejemplo-noticias.com/noticia/14",
+    "pagina_origen": "https://ejemplo-noticias.com/noticias?page=3"
+  },
+  {
+    "titulo": "Noticia real simulada 15",
+    "resumen": "Contenido extraido de una pagina con paginacion.",
+    "url": "https://ejemplo-noticias.com/noticia/15",
+    "pagina_origen": "https://ejemplo-noticias.com/noticias?page=3"
+  },
+  {
+    "titulo": "Noticia real simulada 16",
+    "resumen": "Contenido extraido de una pagina con paginacion.",
+    "url": "https://ejemplo-noticias.com/noticia/16",
+    "pagina_origen": "https://ejemplo-noticias.com/noticias?page=4"
+  },
+  {
+    "titulo": "Noticia real simulada 17",
+    "resumen": "Contenido extraido de una pagina con paginacion.",
+    "url": "https://ejemplo-noticias.com/noticia/17",
+    "pagina_origen": "https://ejemplo-noticias.com/noticias?page=4"
+  },
+  {
+    "titulo": "Noticia real simulada 18",
+    "resumen": "Contenido extraido de una pagina con paginacion.",
+    "url": "https://ejemplo-noticias.com/noticia/18",
+    "pagina_origen": "https://ejemplo-noticias.com/noticias?page=4"
+  },
+  {
+    "titulo": "Noticia real simulada 19",
+    "resumen": "Contenido extraido de una pagina con paginacion.",
+    "url": "https://ejemplo-noticias.com/noticia/19",
+    "pagina_origen": "https://ejemplo-noticias.com/noticias?page=4"
+  },
+  {
+    "titulo": "Noticia real simulada 20",
+    "resumen": "Contenido extraido de una pagina con paginacion.",
+    "url": "https://ejemplo-noticias.com/noticia/20",
+    "pagina_origen": "https://ejemplo-noticias.com/noticias?page=4"
+  }
+]

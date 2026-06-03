@@ -1,0 +1,16 @@
+# Pregunta de negocio: ¿Cuál es el sentimiento promedio y el total de noticias por categoría?
+# Archivo RDF:        data/ac13_simanw.ttl
+# Resultado esperado: tabla con categoría, sentimiento_promedio y total, ordenada por categoría
+
+PREFIX simanw: <http://simanw.org/ontology/>
+PREFIX rdfs:   <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT ?categoria (AVG(?score) AS ?sentimiento_promedio) (COUNT(?noticia) AS ?total)
+WHERE {
+    ?noticia a simanw:Noticia ;
+             simanw:tieneCategoria ?cat ;
+             simanw:sentimientoScore ?score .
+    ?cat rdfs:label ?categoria .
+}
+GROUP BY ?categoria
+ORDER BY ?categoria

@@ -1,0 +1,11 @@
+{
+  "actividad": "AC-2",
+  "tipo": "nubes_por_categoria",
+  "fecha_generacion": "2026-06-03T18:50:02.748460+00:00",
+  "archivos": {
+    "ciencia": "data/nube_ac2_ciencia.png",
+    "economia": "data/nube_ac2_economia.png",
+    "gobierno": "data/nube_ac2_gobierno.png",
+    "tecnologia": "data/nube_ac2_tecnologia.png"
+  }
+}

@@ -53,6 +53,7 @@ class AnalizadorSentimientos:
         self.sia = SentimentIntensityAnalyzer()
 
     def analizar(self, texto: str) -> dict:
+        texto = texto or ""
         scores = self.sia.polarity_scores(texto)
         compound = self._ajustar_compound_espanol(texto, scores["compound"])
 
@@ -97,7 +98,7 @@ class AnalizadorSentimientos:
         }
 
     def analizar_noticias(self, noticias: list[dict]) -> tuple[list[dict], dict]:
-        documentos = [noticia["cuerpo"] for noticia in noticias]
+        documentos = [_texto_noticia(noticia) for noticia in noticias]
         resultados, resumen = self.analizar_corpus(documentos)
 
         for noticia, sentimiento in zip(noticias, resultados):
@@ -126,3 +127,10 @@ class AnalizadorSentimientos:
             return compound_vader
 
         return max(min((positivos - negativos) / total, 1.0), -1.0)
+
+
+def _texto_noticia(noticia: dict) -> str:
+    return " ".join(
+        str(noticia.get(campo, "") or "")
+        for campo in ("cuerpo", "resumen", "titulo", "texto_original")
+    ).strip()

@@ -61,3 +61,28 @@ def test_recomendador_por_perfil_suma_similitudes():
     recomendaciones = recomendador.recomendar_por_perfil([0, 1], top_n=1)
 
     assert recomendaciones == [(2, 1.0)]
+
+
+def test_recomendador_construye_similitud_y_devuelve_detalle():
+    noticias = [
+        {"titulo": "IA", "cuerpo": "inteligencia artificial software", "categoria": "tecnologia"},
+        {"titulo": "Apps", "cuerpo": "software y plataforma digital", "categoria_predicha": "tecnologia"},
+        {"titulo": "Bolsa", "cuerpo": "mercados financieros inversion", "categoria_original": "economia"},
+    ]
+    recomendador = SistemaRecomendacion(noticias)
+
+    detalle = recomendador.recomendar_detallado(0, top_n=1)
+
+    assert detalle[0]["indice"] == 1
+    assert detalle[0]["categoria"] == "tecnologia"
+
+
+def test_recomendador_valida_indices_fuera_de_rango():
+    recomendador = SistemaRecomendacion([{"titulo": "N1", "cuerpo": "texto"}])
+
+    try:
+        recomendador.recomendar(3)
+    except IndexError as exc:
+        assert "fuera de rango" in str(exc)
+    else:
+        raise AssertionError("Se esperaba IndexError")

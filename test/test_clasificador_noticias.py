@@ -42,3 +42,24 @@ def test_clasificador_agrega_prediccion_a_noticias():
 
     assert noticias[0]["categoria_predicha"] == "economia"
     assert "scores_categoria" in noticias[0]
+
+
+def test_clasificador_valida_datos_de_entrenamiento_vacios():
+    clasificador = ClasificadorNoticias()
+
+    try:
+        clasificador.entrenar([], [])
+    except ValueError as exc:
+        assert "vacios" in str(exc)
+    else:
+        raise AssertionError("Se esperaba ValueError")
+
+
+def test_clasificador_usa_resumen_si_falta_cuerpo():
+    clasificador = ClasificadorNoticias()
+    clasificador.entrenar(TEXTOS_ENTRENAMIENTO, ETIQUETAS_ENTRENAMIENTO)
+    noticias = [{"titulo": "Mercados", "resumen": "bolsa acciones inversion y finanzas"}]
+
+    clasificador.clasificar_noticias(noticias)
+
+    assert noticias[0]["categoria_predicha"] == "economia"

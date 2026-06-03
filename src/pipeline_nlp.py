@@ -4,6 +4,7 @@ import re
 from collections import Counter
 
 import nltk
+from nltk import bigrams, trigrams
 from nltk.corpus import stopwords
 from nltk.stem import SnowballStemmer
 from nltk.tokenize import sent_tokenize, word_tokenize
@@ -41,6 +42,9 @@ class PipelineNLP:
         sin_stopwords = self.eliminar_stopwords(tokens)
         stems = self.aplicar_stemming(sin_stopwords)
 
+        bi = Counter(bigrams(sin_stopwords)).most_common(10)
+        tri = Counter(trigrams(sin_stopwords)).most_common(5)
+
         return {
             "original": texto,
             "limpio": limpio,
@@ -50,6 +54,8 @@ class PipelineNLP:
             "num_oraciones": len(sent_tokenize(texto, language=self.idioma)),
             "vocabulario_unico": len(set(sin_stopwords)),
             "riqueza_lexica": len(set(sin_stopwords)) / max(len(sin_stopwords), 1),
+            "top_bigramas": [list(b) for b, _ in bi],
+            "top_trigramas": [list(t) for t, _ in tri],
         }
 
     def procesar_noticias(self, noticias: list[dict]) -> list[dict]:

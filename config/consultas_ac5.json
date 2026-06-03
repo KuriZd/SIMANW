@@ -1,0 +1,22 @@
+[
+  {
+    "consulta": "inteligencia artificial software",
+    "categoria_relevante": "tecnologia",
+    "criterio_relevancia": "Documentos cuya categoria predicha u original sea tecnologia."
+  },
+  {
+    "consulta": "mercados economia inversion",
+    "categoria_relevante": "economia",
+    "criterio_relevancia": "Documentos cuya categoria predicha u original sea economia."
+  },
+  {
+    "consulta": "investigacion ciencia salud clima",
+    "categoria_relevante": "ciencia",
+    "criterio_relevancia": "Documentos cuya categoria predicha u original sea ciencia."
+  },
+  {
+    "consulta": "gobierno elecciones ley politica",
+    "categoria_relevante": "politica",
+    "criterio_relevancia": "Documentos cuya categoria predicha u original sea politica."
+  }
+]

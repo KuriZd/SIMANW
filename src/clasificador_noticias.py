@@ -4,6 +4,7 @@ from collections import Counter
 
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics import classification_report
 from sklearn.model_selection import cross_val_score
 from sklearn.svm import LinearSVC
 
@@ -65,8 +66,14 @@ class ClasificadorNoticias:
         self.entrenado = False
 
     def entrenar(self, textos: list[str], etiquetas: list[str]) -> dict:
+        if not textos or not etiquetas:
+            raise ValueError("Textos y etiquetas no pueden estar vacios")
         if len(textos) != len(etiquetas):
             raise ValueError("Textos y etiquetas deben tener la misma longitud")
+        if any(not str(texto).strip() for texto in textos):
+            raise ValueError("Los textos de entrenamiento no pueden estar vacios")
+        if any(not str(etiqueta).strip() for etiqueta in etiquetas):
+            raise ValueError("Las etiquetas de entrenamiento no pueden estar vacias")
         if len(set(etiquetas)) < 2:
             raise ValueError("Se necesitan al menos dos categorias para entrenar")
 
@@ -78,15 +85,26 @@ class ClasificadorNoticias:
         conteo_clases = Counter(etiquetas)
         cv = min(3, len(textos) // 2, min(conteo_clases.values()))
         scores = cross_val_score(self.clasificador, matriz, etiquetas, cv=cv) if cv >= 2 else np.array([1.0])
+        pred_entrenamiento = self.clasificador.predict(matriz)
 
         return {
             "accuracy_cv": float(scores.mean()),
             "categorias": self.categorias,
             "n_muestras": len(textos),
+            "classification_report": classification_report(
+                etiquetas,
+                pred_entrenamiento,
+                zero_division=0,
+                output_dict=True,
+            ),
         }
 
     def predecir(self, textos: list[str]) -> np.ndarray:
         self._validar_entrenado()
+        if not textos:
+            return np.array([])
+        if any(not str(texto).strip() for texto in textos):
+            raise ValueError("Los textos a clasificar no pueden estar vacios")
         matriz = self.vectorizer.transform(textos)
         return self.clasificador.predict(matriz)
 
@@ -110,7 +128,7 @@ class ClasificadorNoticias:
         resultados = []
 
         for noticia in noticias:
-            texto = f"{noticia['titulo']} {noticia['cuerpo']}"
+            texto = _texto_noticia(noticia)
             prediccion, scores = self.predecir_con_confianza(texto)
             noticia["categoria_predicha"] = prediccion
             noticia["scores_categoria"] = scores
@@ -121,3 +139,13 @@ class ClasificadorNoticias:
     def _validar_entrenado(self) -> None:
         if not self.entrenado:
             raise ValueError("El clasificador debe entrenarse antes de predecir")
+
+
+def _texto_noticia(noticia: dict) -> str:
+    texto = " ".join(
+        str(noticia.get(campo, "") or "")
+        for campo in ("titulo", "cuerpo", "resumen", "texto_original")
+    ).strip()
+    if not texto:
+        raise ValueError("La noticia no contiene texto para clasificar")
+    return texto

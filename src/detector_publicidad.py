@@ -4,10 +4,17 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 
+NOTA_ETICA_PUBLICIDAD = (
+    "El analisis de conversaciones para publicidad o recomendaciones debe informar al usuario, "
+    "solicitar consentimiento, evitar inferencias sensibles y proteger la privacidad."
+)
+
+
 class DetectorTemasPublicidad:
     """Detecta temas en conversaciones y selecciona publicidad relacionada."""
 
-    def __init__(self) -> None:
+    def __init__(self, umbral_confianza: float = 0.08) -> None:
+        self.umbral_confianza = umbral_confianza
         self.mensajes: list[dict] = []
         self.catalogo_publicidad = {
             "tecnologia": [
@@ -58,8 +65,8 @@ class DetectorTemasPublicidad:
 
         mejor_idx = int(similitudes.argmax())
         confianza = float(similitudes[mejor_idx])
-        if confianza <= 0:
-            return "general", 0.0
+        if confianza < self.umbral_confianza:
+            return "general", confianza
 
         return self.temas[mejor_idx], confianza
 
@@ -68,12 +75,21 @@ class DetectorTemasPublicidad:
             return self.catalogo_publicidad[tema][0]
         return "Descubre las mejores ofertas del dia"
 
+    def resumen_temas(self) -> dict:
+        conteo: dict[str, int] = {}
+        for mensaje in self.mensajes:
+            tema = mensaje.get("tema", "general")
+            conteo[tema] = conteo.get(tema, 0) + 1
+        return {"temas": conteo, "nota_etica": NOTA_ETICA_PUBLICIDAD}
+
     def simular_chat(self, conversacion: list[tuple[str, str]]) -> list[dict]:
         resultados = []
 
         for usuario, mensaje in conversacion:
             self.agregar_mensaje(usuario, mensaje)
             tema, confianza = self.detectar_tema()
+            self.mensajes[-1]["tema"] = tema
+            self.mensajes[-1]["confianza"] = confianza
             publicidad = self.obtener_publicidad(tema)
             resultados.append(
                 {

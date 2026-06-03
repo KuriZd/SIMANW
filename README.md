@@ -1,6 +1,6 @@
-# SIMANW - Fase 1: Rastreador Web de Noticias
+# SIMANW — Sistema Inteligente de Monitoreo y Análisis de Noticias Web
 
-Sistema Inteligente de Monitoreo y Análisis de Noticias Web. Esta primera fase implementa la base del rastreador encargado de leer HTML, extraer noticias, controlar el alcance del rastreo y exportar los datos obtenidos.
+Sistema Inteligente de Monitoreo y Análisis de Noticias Web. Implementa un pipeline completo de procesamiento desde extracción y NLP hasta clasificación, análisis de sentimientos, búsqueda inteligente y un dashboard visual interactivo.
 
 ## Objetivo de la Fase 1
 
@@ -65,6 +65,14 @@ Desde la raíz del proyecto:
 python main.py
 ```
 
+## Pruebas
+
+Ejecutar la suite de tests:
+
+```bash
+python -m pytest
+```
+
 ## Salida esperada
 
 El programa ejecuta cuatro pasos:
@@ -112,128 +120,183 @@ Después se movería el spider a la carpeta `spiders/` del proyecto generado.
 
 Al finalizar esta fase, el sistema cuenta con una base funcional para extraer noticias desde HTML, controlar el alcance de rastreo y almacenar los datos. Esta información podrá ser utilizada en las siguientes fases para procesamiento de lenguaje natural, clasificación, búsqueda inteligente, análisis semántico y generación de reportes.
 
-## Solución de problemas
+---
 
-### Error al activar el entorno virtual en PowerShell
+## Aplicacion de escritorio
 
-Si al intentar activar el entorno virtual aparece un error similar a este:
+SIMANW incluye una interfaz de escritorio construida con `customtkinter`.
 
-```txt
-No se puede cargar el archivo .venv\Scripts\Activate.ps1 porque la ejecución de scripts está deshabilitada en este sistema.
-```
+### Ejecutar la app de escritorio
 
-El problema ocurre porque PowerShell tiene deshabilitada la ejecución de scripts por seguridad.
-
-Para solucionarlo, ejecutar el siguiente comando en PowerShell:
+Desde PowerShell, en la raiz del proyecto:
 
 ```powershell
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-```
-
-Cuando PowerShell pregunte si se desea cambiar la directiva de ejecución, escribir:
-
-```powershell
-S
-```
-
-Después, volver a activar el entorno virtual:
-
-```powershell
-.venv\Scripts\Activate.ps1
-```
-
-Si la activación fue correcta, la terminal debería mostrar algo similar a:
-
-```powershell
-(.venv) PS C:\Users\zamud\OneDrive\Documentos\SIMANW>
-```
-
-También se puede usar una solución temporal solo para la terminal actual:
-
-```powershell
-Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
-.venv\Scripts\Activate.ps1
-```
-
-### Error al instalar `pandas` con `pip install -r requirements.txt`
-
-Si al instalar las dependencias aparece un error similar a este:
-
-```txt
-Preparing metadata (pyproject.toml) ... error
-ERROR: Could not find C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe
-metadata-generation-failed
-Encountered error while generating package metadata.
-pandas
-```
-
-El problema puede ocurrir porque se está usando una versión de Python demasiado reciente, por ejemplo **Python 3.13**, mientras que algunas dependencias del proyecto, como `pandas==2.2.2`, pueden no tener una versión precompilada compatible para esa versión de Python.
-
-Cuando esto sucede, `pip` intenta compilar `pandas` manualmente desde el código fuente, pero en Windows requiere herramientas adicionales de compilación como Visual Studio Build Tools. Para evitar este problema, se recomienda usar **Python 3.12**.
-
-Primero, verificar la versión actual de Python:
-
-```powershell
-python --version
-```
-
-Si aparece una versión como `Python 3.13.x`, salir del entorno virtual:
-
-```powershell
-deactivate
-```
-
-Instalar Python 3.12 desde PowerShell:
-
-```powershell
-winget install --id Python.Python.3.12 -e
-```
-
-Cerrar y volver a abrir PowerShell. Después, entrar nuevamente a la carpeta del proyecto:
-
-```powershell
-cd "C:\Users\zamud\OneDrive\Documentos\SIMANW"
-```
-
-Eliminar el entorno virtual anterior:
-
-```powershell
-Remove-Item -Recurse -Force .venv
-```
-
-Crear un nuevo entorno virtual usando Python 3.12:
-
-```powershell
-py -3.12 -m venv .venv
-```
-
-Activar el entorno virtual:
-
-```powershell
+cd "C:\Users\Oscar Zamudio\Documents\SIMANW"
 .\.venv\Scripts\Activate.ps1
+python -m src.nltk_setup
+python app_desktop.py
 ```
 
-Actualizar las herramientas de instalación:
+Si aun no existe el entorno virtual o faltan dependencias:
 
 ```powershell
-python -m pip install --upgrade pip setuptools wheel
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python -m src.nltk_setup
+python app_desktop.py
 ```
 
-Instalar nuevamente las dependencias:
+### Flujo basico
 
-```powershell
+1. Abrir `Load / Analyze News`.
+2. Seleccionar `Demo local` para una ejecucion reproducible sin internet.
+3. Presionar `Analyze News`.
+4. Revisar `Dashboard`, `Smart Results`, `News Explorer`, `Search & Q&A`, `Knowledge Graph`, `Reports & Exports` y `Academic Evidence`.
+
+---
+
+## Interfaz visual con Streamlit
+
+SIMANW incluye un dashboard interactivo construido con Streamlit que expone todas las capacidades del sistema en un entorno visual moderno.
+
+### Instalación de dependencias
+
+```bash
 pip install -r requirements.txt
 ```
 
-Verificar que el entorno virtual esté usando Python 3.12:
+### Preparación de recursos NLTK
+
+Al ejecutar la aplicación por primera vez se descargan automáticamente los recursos de NLTK necesarios (`punkt`, `punkt_tab`, `stopwords`, `vader_lexicon`). Si prefieres descargarlos manualmente:
+
+```python
+import nltk
+nltk.download("punkt")
+nltk.download("punkt_tab")
+nltk.download("stopwords")
+nltk.download("vader_lexicon")
+```
+
+### Generar los datos (si aún no existen)
+
+```bash
+python main.py
+```
+
+Esto produce `data/noticias_extraidas.json` con el corpus procesado completo.
+
+### Ejecutar la interfaz
+
+```bash
+streamlit run app.py
+```
+
+La aplicación abre en `http://localhost:8501` en el navegador.
+
+### Secciones del dashboard
+
+| Sección | Descripción |
+|---------|-------------|
+| **Dashboard** | Vista general con métricas del corpus (total noticias, categorías, autores, sentimiento predominante), gráfica de distribución por categoría, gráfica de sentimientos y tabla resumen. |
+| **Noticias extraídas** | Catálogo filtrable por categoría, sentimiento, autor y rango de fechas. Muestra título, cuerpo, categoría original, categoría predicha, sentimiento y enlace a la fuente. |
+| **Pipeline NLP** | Para cualquier noticia seleccionada: texto original, texto limpio, tokens, tokens sin stopwords y stems. Estadísticas del corpus (vocabulario, riqueza léxica) y palabras más frecuentes. Top términos TF-IDF por documento. |
+| **Clasificación** | Comparación entre categoría original y categoría predicha (LinearSVC). Scores de decisión por categoría visualizados en barras horizontales. Tabla comparativa del corpus completo. |
+| **Sentimientos** | Distribución de sentimientos (positivo/neutral/negativo) con gráfica de pastel y barras de compound score. Detalle por noticia con gauge de intensidad de sentimiento. |
+| **Búsqueda inteligente** | Búsqueda en lenguaje natural o vectorial. Interpreta filtros semánticos (sentimiento, categoría) automáticamente. Muestra resultados con relevancia, snippet y metadatos. |
+| **Recomendaciones** | Selecciona una noticia base y obtiene las más similares por contenido TF-IDF. Mapa de calor con la matriz de similitud coseno del corpus. |
+| **Evaluación IRS** | Tabla de métricas (Precision, Recall, F1, Average Precision) para consultas de ejemplo por categoría. MAP global del sistema. Herramienta interactiva de Precision@K. |
+| **Exportación** | Descarga el corpus en JSON (completo con NLP) o CSV (campos tabulares con métricas de sentimiento). Guardado directo en disco en `data/`. |
+
+---
+
+## Web Semántica — Knowledge Graph (AC-13)
+
+SIMANW construye un Knowledge Graph en RDF a partir del corpus procesado.
+
+### Archivos generados
+
+| Archivo | Formato | Descripción |
+|---------|---------|-------------|
+| `data/ac13_simanw.ttl` | Turtle | Volcado RDF principal |
+| `data/ac13_simanw.jsonld` | JSON-LD compacto | Mismos datos con `@context` legible |
+| `shapes/simanw_shapes.ttl` | SHACL | Reglas de validación formal |
+| `queries/*.rq` | SPARQL | Consultas sobre el grafo local |
+| `docs/ontologia_simanw.md` | Markdown | Documentación completa de la ontología |
+
+### Generar el grafo
 
 ```powershell
-python --version
+python main_actividades_complementarias.py
 ```
 
-La salida esperada debe ser similar a:
+Esto ejecuta `ejecutar_ac13()` y regenera los archivos RDF en `data/`.
 
-```txt
-Python 3.12.x
+### Activar enriquecimiento online con Wikidata
+
+Por defecto SIMANW puede ejecutar el Knowledge Graph en modo offline para que la demo sea reproducible sin depender de red. Para AC-7, si se quiere consultar Wikidata realmente y registrar QIDs/enlaces externos obtenidos desde el endpoint SPARQL, activa la variable de entorno antes de abrir la app:
+
+```powershell
+$env:SIMANW_WIKIDATA_ONLINE = "1"
+python app_desktop.py
 ```
 
+En la app, ejecuta el pipeline desde `Load / Analyze News` y revisa `Knowledge Graph` o `Academic Evidence`. La evidencia debe mostrar `wikidata_online: True`, el endpoint `https://query.wikidata.org/sparql`, entidades evaluadas, enlaces creados y archivos como `data/enlaces_wikidata_ac7.json`.
+
+Para volver al modo offline en la misma terminal:
+
+```powershell
+Remove-Item Env:\SIMANW_WIKIDATA_ONLINE -ErrorAction SilentlyContinue
+python app_desktop.py
+```
+
+Si el modo online esta desactivado o no hay conexion, AC-7 se reporta como parcial/offline y no se debe presentar como enriquecimiento real de Wikidata.
+
+### Prefijos principales
+
+| Prefijo | URI |
+|---------|-----|
+| `simanw:` | `http://simanw.org/ontology/` |
+| `dc:` | `http://purl.org/dc/elements/1.1/` |
+| `schema:` | `https://schema.org/` |
+| `foaf:` | `http://xmlns.com/foaf/0.1/` |
+| `skos:` | `http://www.w3.org/2004/02/skos/core#` |
+
+### Consultas SPARQL
+
+```powershell
+# Ejecutar las consultas AC-13 en consola
+python -c "
+from main_actividades_complementarias import ejecutar_ac13
+ejecutar_ac13()
+"
+```
+
+### Validación SHACL
+
+```python
+from src.knowledge_graph import KnowledgeGraphSIMANW
+kg = KnowledgeGraphSIMANW()
+# ... construir grafo ...
+resultado = kg.validar_con_shacl('shapes/simanw_shapes.ttl')
+print(resultado['conforme'], resultado['texto'])
+```
+
+---
+
+### Ejecución del pipeline por consola
+
+El proyecto también funciona sin la interfaz visual:
+
+```bash
+# Pipeline completo
+python main.py
+
+# Por fases
+python main_fase2.py
+python main_fase3.py
+python main_fase4.py
+
+# Tests
+python -m pytest
+```

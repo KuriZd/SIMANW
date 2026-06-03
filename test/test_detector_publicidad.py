@@ -32,3 +32,13 @@ def test_detector_publicidad_simula_chat_con_anuncios():
     assert len(resultados) == 2
     assert resultados[-1]["tema"] == "economia"
     assert "publicidad" in resultados[-1]
+
+
+def test_detector_publicidad_umbral_bajo_devuelve_general_y_resumen_etico():
+    detector = DetectorTemasPublicidad(umbral_confianza=0.5)
+    resultados = detector.simular_chat([("Ana", "comentario breve sin tema claro")])
+
+    assert resultados[0]["tema"] == "general"
+    resumen = detector.resumen_temas()
+    assert resumen["temas"] == {"general": 1}
+    assert "consentimiento" in resumen["nota_etica"]
