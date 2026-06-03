@@ -7,6 +7,8 @@ __pycache__/
 *.pyc
 .env
 .DS_Store
+.agents/
+.claude/
 data/noticias_extraidas.csv
 data/noticias_extraidas.json
 data/raw/
