@@ -10,6 +10,7 @@ __pycache__/
 .agents/
 .claude/
 AGENTS.md
+ClAUDE.md
 data/noticias_extraidas.csv
 data/noticias_extraidas.json
 data/raw/
