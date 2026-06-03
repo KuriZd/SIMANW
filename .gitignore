@@ -9,6 +9,7 @@ __pycache__/
 .DS_Store
 .agents/
 .claude/
+AGENTS.md
 data/noticias_extraidas.csv
 data/noticias_extraidas.json
 data/raw/
