@@ -19,6 +19,7 @@ _ICON_ERROR   = "✗"
 
 _MODO_DEMO     = "Demo local"
 _MODO_PREDEF   = "Predefined source"
+_MODO_TODAS    = "All predefined sources"
 _MODO_CUSTOM   = "Custom RSS/URL"
 
 
@@ -91,7 +92,7 @@ class SeccionCargar(ctk.CTkFrame):
 
         self.selector_modo = ctk.CTkOptionMenu(
             card,
-            values=[_MODO_DEMO, _MODO_PREDEF, _MODO_CUSTOM],
+            values=[_MODO_DEMO, _MODO_PREDEF, _MODO_TODAS, _MODO_CUSTOM],
             variable=self.modo_var,
             command=lambda _: self._actualizar_modo_entrada(),
             fg_color=THEME["bg_input"],
@@ -178,6 +179,19 @@ class SeccionCargar(ctk.CTkFrame):
         )
         self.url_entry.grid(row=7, column=0, sticky="ew", padx=CARD_PADDING, pady=(0, 8))
 
+        self.btn_guardar_fuente = ctk.CTkButton(
+            card,
+            text="Guardar fuente",
+            command=self._guardar_fuente_custom,
+            fg_color=THEME["bg_input"],
+            hover_color=THEME["border"],
+            border_width=1,
+            border_color=THEME["border"],
+            text_color=THEME["text_1"],
+            height=32,
+        )
+        self.btn_guardar_fuente.grid(row=8, column=0, sticky="ew", padx=CARD_PADDING, pady=(0, 8))
+
         self.paginado_fields: list[ctk.CTkEntry] = []
         self.paginado_labels: list[ctk.CTkLabel] = []
         self.paginado_widgets: list[ctk.CTkBaseClass] = []
@@ -191,7 +205,7 @@ class SeccionCargar(ctk.CTkFrame):
                 ("Max pages", self.max_paginas_var, "5"),
                 ("Delay seconds", self.delay_var, "3"),
             ],
-            start=8,
+            start=9,
         ):
             lbl = ctk.CTkLabel(card, text=label, font=FONT_META, text_color=THEME["text_1"], anchor="w")
             lbl.grid(row=row * 2, column=0, sticky="w", padx=CARD_PADDING, pady=(0, 2))
@@ -218,7 +232,7 @@ class SeccionCargar(ctk.CTkFrame):
             text_color=THEME["text_1"],
             height=36,
         )
-        self.btn_analizar.grid(row=28, column=0, sticky="ew", padx=CARD_PADDING, pady=(8, CARD_PADDING))
+        self.btn_analizar.grid(row=34, column=0, sticky="ew", padx=CARD_PADDING, pady=(8, CARD_PADDING))
 
         self._actualizar_modo_entrada()
         return card
@@ -358,6 +372,8 @@ class SeccionCargar(ctk.CTkFrame):
             nombre = self.fuente_predef_var.get()
             fuente = self.fuentes_service.obtener_por_nombre(nombre)
             return "predefinida", fuente["id"]
+        if modo == _MODO_TODAS:
+            return "todas", ""
         # Custom
         tipo = self.tipo_custom_var.get()
         url  = self.url_var.get().strip()
@@ -383,6 +399,34 @@ class SeccionCargar(ctk.CTkFrame):
 
     def _guardar_estado_formulario(self) -> None:
         self.root_app.load_form_state = self.get_form_state()
+
+    def _guardar_fuente_custom(self) -> None:
+        url = self.url_var.get().strip()
+        tipo = "rss" if self.tipo_custom_var.get() == "RSS" else "html"
+        try:
+            limite = self._limite_noticias()
+            fuente = self.fuentes_service.guardar_fuente_personalizada(
+                url,
+                tipo=tipo,
+                limite_noticias=limite,
+            )
+        except Exception as exc:
+            messagebox.showerror("Guardar fuente", str(exc))
+            return
+
+        self.service.fase1_service.fuentes_service = self.fuentes_service
+        self.service.fase4_service.fuentes_service = self.fuentes_service
+        self._refrescar_fuentes_predefinidas(fuente["nombre"])
+        self.root_app.set_estado(f"Fuente guardada: {fuente['nombre']}", "ok")
+        messagebox.showinfo("Guardar fuente", f"Fuente guardada: {fuente['nombre']}")
+
+    def _refrescar_fuentes_predefinidas(self, seleccion: str | None = None) -> None:
+        nombres = self.fuentes_service.listar_nombres_fuentes()
+        self.selector_predef.configure(values=nombres or ["Sin fuentes activas"])
+        if seleccion and seleccion in nombres:
+            self.fuente_predef_var.set(seleccion)
+        elif nombres and self.fuente_predef_var.get() not in nombres:
+            self.fuente_predef_var.set(nombres[0])
 
     def _limite_noticias(self) -> int:
         try:
@@ -428,6 +472,7 @@ class SeccionCargar(ctk.CTkFrame):
         self.limit_entry.configure(state="normal")
         self.url_label.configure(text_color=THEME["text_1"] if modo == _MODO_CUSTOM else THEME["text_2"])
         self.url_entry.configure(state=url_state)
+        self.btn_guardar_fuente.configure(state=custom_state)
 
         if modo == _MODO_PREDEF:
             self.selector_predef.grid()
@@ -438,10 +483,12 @@ class SeccionCargar(ctk.CTkFrame):
             self.selector_tipo_custom.grid()
             self.url_label.grid()
             self.url_entry.grid()
+            self.btn_guardar_fuente.grid()
         else:
             self.selector_tipo_custom.grid_remove()
             self.url_label.grid_remove()
             self.url_entry.grid_remove()
+            self.btn_guardar_fuente.grid_remove()
 
         for lbl in getattr(self, "paginado_labels", []):
             lbl.configure(text_color=THEME["text_1"] if paginado_state == "normal" else THEME["text_2"])
@@ -468,6 +515,7 @@ class SeccionCargar(ctk.CTkFrame):
             self.selector_predef.configure(state="disabled")
             self.selector_tipo_custom.configure(state="disabled")
             self.url_entry.configure(state="disabled")
+            self.btn_guardar_fuente.configure(state="disabled")
             self.limit_entry.configure(state="disabled")
         else:
             self._actualizar_modo_entrada()

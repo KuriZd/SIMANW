@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from src.comparador_busqueda import ComparadorModelos, generar_consultas_desde_corpus
+from src.fase1_service import Fase1Service
 from src.motor_busqueda import MotorBusqueda
 
 try:
@@ -20,6 +21,8 @@ class Fase4Service:
         self.motor = MotorBusqueda()
         self.busqueda_natural = None
         self.corpus: list[dict] = []
+        self.fuentes_service = None
+        self.ultima_busqueda_fuentes_errores: list[str] = []
 
     def construir_indice(self, corpus_procesado: list[dict]) -> None:
         if not corpus_procesado:
@@ -51,6 +54,32 @@ class Fase4Service:
         if modelo_norm == "vectorial":
             return [self._enriquecer_resultado(r) for r in self.motor.buscar_vectorial(consulta, top_k=top_k)]
         return self.buscar(consulta, top_k=top_k)
+
+    def buscar_en_fuentes(
+        self,
+        consulta: str,
+        top_k: int = 10,
+        limite_por_fuente: int = 8,
+    ) -> list[dict]:
+        """Busca una consulta en las fuentes activas sin reemplazar el corpus cargado."""
+        self.ultima_busqueda_fuentes_errores = []
+        if not consulta.strip():
+            return []
+
+        fase1 = Fase1Service()
+        if self.fuentes_service is not None:
+            fase1.fuentes_service = self.fuentes_service
+        noticias = fase1.ejecutar_todas_fuentes(limite_noticias=max(int(limite_por_fuente or 8), 1))
+        self.ultima_busqueda_fuentes_errores = list(fase1.errores)
+        if not noticias:
+            return []
+
+        buscador_temporal = Fase4Service()
+        buscador_temporal.construir_indice(noticias)
+        resultados = buscador_temporal.buscar_con_modelo(consulta, modelo="vectorial", top_k=top_k)
+        for item in resultados:
+            item["origen_busqueda"] = "fuentes_noticias"
+        return resultados
 
     def evaluar_modelos_busqueda(
         self,

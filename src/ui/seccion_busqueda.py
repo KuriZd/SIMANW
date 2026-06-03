@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from tkinter import messagebox
+import threading
+from tkinter import BooleanVar, messagebox
 
 import customtkinter as ctk
 
@@ -20,6 +21,7 @@ class SeccionBusquedaQA(ctk.CTkFrame):
         self.query_var = ctk.StringVar()
         self.question_var = ctk.StringVar()
         self.modelo_var = ctk.StringVar(value="Natural")
+        self.buscar_fuentes_var = BooleanVar(value=True)
         self.active_mode = "qa"
         self.mode_buttons: dict[str, ctk.CTkButton] = {}
         self._build()
@@ -124,9 +126,16 @@ class SeccionBusquedaQA(ctk.CTkFrame):
             button_hover_color=THEME["accent"],
             text_color=THEME["text_1"],
         ).grid(row=0, column=0, sticky="ew", padx=(0, 8))
-        ctk.CTkButton(controls, text="Search", command=self._buscar, fg_color=THEME["accent"]).grid(
-            row=0, column=1, sticky="e"
-        )
+        ctk.CTkCheckBox(
+            controls,
+            text="Buscar tambien en fuentes",
+            variable=self.buscar_fuentes_var,
+            fg_color=THEME["accent"],
+            border_color=THEME["border"],
+            text_color=THEME["text_1"],
+        ).grid(row=0, column=1, sticky="e", padx=(0, 8))
+        self.search_button = ctk.CTkButton(controls, text="Search", command=self._buscar, fg_color=THEME["accent"])
+        self.search_button.grid(row=0, column=2, sticky="e")
         self.search_box = ctk.CTkTextbox(
             self.mode_host,
             fg_color=THEME["bg_input"],
@@ -178,18 +187,45 @@ class SeccionBusquedaQA(ctk.CTkFrame):
         self._render_history()
 
     def _buscar(self) -> None:
+        consulta = self.query_var.get().strip()
+        if not consulta:
+            if hasattr(self, "search_box"):
+                self._set_text(self.search_box, "Escribe una consulta para buscar.")
+            return
+        if hasattr(self, "search_button"):
+            self.search_button.configure(state="disabled")
+        if hasattr(self, "search_box"):
+            self._set_text(self.search_box, "Buscando en el corpus cargado y, si hace falta, en fuentes guardadas...")
+        threading.Thread(target=self._buscar_bg, args=(consulta, self.modelo_var.get().lower(), self.buscar_fuentes_var.get()), daemon=True).start()
+
+    def _buscar_bg(self, consulta: str, modelo: str, incluir_fuentes: bool) -> None:
         service = getattr(self.root_app, "simanw_service", None)
-        modelo = self.modelo_var.get().lower()
-        resultados = service.buscar(self.query_var.get(), modelo=modelo) if service else []
+        try:
+            resultados = service.buscar(consulta, modelo=modelo, incluir_fuentes=incluir_fuentes) if service else []
+        except Exception as exc:
+            self.after(0, lambda e=exc: self._on_busqueda_error(str(e)))
+            return
+        self.after(0, lambda r=resultados: self._mostrar_resultados_busqueda(r))
+
+    def _mostrar_resultados_busqueda(self, resultados: list[dict]) -> None:
         texto = []
         for idx, item in enumerate(resultados, start=1):
+            origen = item.get("origen_busqueda") or "corpus_cargado"
             texto.append(
-                f"{idx}. [{item.get('score', 0):.3f}] {item.get('titulo', '')}\n"
+                f"{idx}. [{item.get('score', 0):.3f}] {item.get('titulo', '')} ({origen})\n"
                 f"   {item.get('categoria', '?')} | {item.get('sentimiento', '?')} | {item.get('fecha', '')}\n"
                 f"   {item.get('snippet', '')}\n   {item.get('url', '')}\n"
             )
         if hasattr(self, "search_box"):
             self._set_text(self.search_box, "\n".join(texto) or "No results.")
+        if hasattr(self, "search_button"):
+            self.search_button.configure(state="normal")
+
+    def _on_busqueda_error(self, mensaje: str) -> None:
+        if hasattr(self, "search_box"):
+            self._set_text(self.search_box, f"No se pudo completar la busqueda: {mensaje}")
+        if hasattr(self, "search_button"):
+            self.search_button.configure(state="normal")
 
     def _preguntar(self) -> None:
         service = getattr(self.root_app, "simanw_service", None)

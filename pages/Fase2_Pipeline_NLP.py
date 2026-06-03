@@ -23,7 +23,7 @@ aplicar_estilo_global()
 
 
 @st.cache_data(show_spinner=False)
-def _cargar_noticias_archivo() -> list[dict]:
+def _cargar_noticias_archivo(_mtime: float) -> list[dict]:
     ruta = Path("data/noticias_extraidas.json")
     if not ruta.exists() or ruta.stat().st_size < 10:
         return []
@@ -35,7 +35,11 @@ def _cargar_noticias_archivo() -> list[dict]:
 
 def _noticias_disponibles() -> list[dict]:
     sesion = st.session_state.get("noticias", [])
-    return sesion if sesion else _cargar_noticias_archivo()
+    if sesion:
+        return sesion
+    ruta = Path("data/noticias_extraidas.json")
+    mtime = ruta.stat().st_mtime if ruta.exists() else 0.0
+    return _cargar_noticias_archivo(mtime)
 
 
 def _run_fase2(noticias: list[dict]) -> None:

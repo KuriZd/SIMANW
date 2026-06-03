@@ -15,18 +15,25 @@ Schema de cada item del corpus procesado:
 """
 from __future__ import annotations
 
+import re
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from src.exportador import guardar_csv, guardar_json
-from src.pipeline_nlp import PipelineNLP
+
+try:
+    from src.pipeline_nlp import PipelineNLP
+    _PIPELINE_NLP_DISPONIBLE = True
+except Exception:
+    PipelineNLP = None  # type: ignore[assignment]
+    _PIPELINE_NLP_DISPONIBLE = False
 
 try:
     from src.representacion_vectorial import RepresentacionVectorial
     from src.similitud import CalculadorSimilitud
     _TFIDF_DISPONIBLE = True
-except ImportError:
+except Exception:
     _TFIDF_DISPONIBLE = False
 
 RUTA_JSON_DEFAULT = "data/processed/corpus_procesado.json"
@@ -63,8 +70,13 @@ class Fase2Service:
         copias = [dict(n) for n in noticias]
 
         # NLP: limpiar, tokenizar, stopwords, stemming
-        pipeline = PipelineNLP()
-        nlp_results = pipeline.procesar_noticias(copias)
+        if _PIPELINE_NLP_DISPONIBLE and PipelineNLP is not None:
+            pipeline = PipelineNLP()
+            nlp_results = pipeline.procesar_noticias(copias)
+        else:
+            pipeline = None
+            errores.append("PipelineNLP no disponible; se usa tokenizacion simple sin NLTK.")
+            nlp_results = [_nlp_basico(copia.get("cuerpo", "")) for copia in copias]
         # nlp_results[i] contiene: limpio, tokens, sin_stopwords, stems,
         #                           num_oraciones, vocabulario_unico, riqueza_lexica
         # copias[i]["nlp"] ha sido mutado por procesar_noticias (en la copia, no en el original)
@@ -118,7 +130,10 @@ class Fase2Service:
             })
 
         # Estadísticas: pasar nlp_results (no corpus) a estadisticas_corpus
-        estadisticas = pipeline.estadisticas_corpus(nlp_results)
+        if pipeline is not None:
+            estadisticas = pipeline.estadisticas_corpus(nlp_results)
+        else:
+            estadisticas = _estadisticas_basicas(nlp_results)
         if tfidf_ok and repr_vectorial is not None:
             estadisticas.update(repr_vectorial.info_matriz())
             try:
@@ -222,4 +237,41 @@ def _aplanar_fila(item: dict) -> dict:
         "vocabulario_unico":  item["vocabulario_unico"],
         "riqueza_lexica":     item["riqueza_lexica"],
         "terminos_relevantes": ", ".join(item["terminos_relevantes"]),
+    }
+
+
+def _nlp_basico(texto: str) -> dict:
+    limpio = re.sub(r"[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]", " ", str(texto).lower())
+    limpio = re.sub(r"\s+", " ", limpio).strip()
+    tokens = re.findall(r"\b[\wáéíóúñü]+\b", limpio, flags=re.IGNORECASE)
+    stop = {
+        "de", "la", "el", "en", "y", "a", "los", "las", "un", "una", "que",
+        "con", "por", "para", "del", "al", "se", "es", "son", "como",
+    }
+    terminos = [token for token in tokens if len(token) > 2 and token not in stop]
+    return {
+        "limpio": limpio,
+        "tokens": tokens,
+        "sin_stopwords": terminos,
+        "stems": terminos,
+        "num_oraciones": max(len(re.findall(r"[.!?]+", str(texto))), 1 if texto else 0),
+        "vocabulario_unico": len(set(terminos)),
+        "riqueza_lexica": len(set(terminos)) / max(len(terminos), 1),
+    }
+
+
+def _estadisticas_basicas(nlp_results: list[dict]) -> dict:
+    total_tokens = sum(len(item.get("tokens", [])) for item in nlp_results)
+    vocab = set()
+    stems = set()
+    for item in nlp_results:
+        vocab.update(item.get("sin_stopwords", []))
+        stems.update(item.get("stems", []))
+    total_docs = len(nlp_results)
+    return {
+        "total_documentos": total_docs,
+        "total_tokens": total_tokens,
+        "vocabulario_total": len(vocab),
+        "stems_unicos": len(stems),
+        "promedio_tokens_doc": round(total_tokens / max(total_docs, 1), 1),
     }

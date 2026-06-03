@@ -60,10 +60,11 @@ def test_chatbot_contextual_personaliza_por_tema_favorito():
     chatbot = ChatbotContextual(noticias_demo(), motor_demo())
     chatbot.responder("Que noticias hay de tecnologia?")
 
-    respuesta, tipo, confianza = chatbot.responder("inteligencia artificial economia")
+    # Query con tema explícito: "tecnologia" (inteligencia → tecnologia)
+    respuesta, tipo, confianza = chatbot.responder("inteligencia artificial programacion")
 
     assert tipo == "personalizada"
-    assert "Como te interesa economia" in respuesta
+    assert "Como te interesa tecnologia" in respuesta
     assert confianza > 0
 
 

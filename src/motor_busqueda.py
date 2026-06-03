@@ -69,21 +69,22 @@ class MotorBusqueda:
         self._validar_indexado()
         consulta_vec = self.vectorizer.transform([consulta])
         similitudes = cosine_similarity(consulta_vec, self.matriz_busqueda)[0]
-        indices = similitudes.argsort()[::-1][:top_k]
+        candidatos = []
+        for indice, relevancia in enumerate(similitudes):
+            score = self._score_ajustado(consulta, self.documentos[int(indice)], float(relevancia))
+            if score > 0:
+                candidatos.append((int(indice), float(relevancia), score))
+        candidatos.sort(key=lambda item: item[2], reverse=True)
         resultados = []
 
-        for indice in indices:
-            relevancia = float(similitudes[indice])
-            if relevancia <= 0:
-                continue
-
+        for indice, relevancia, score in candidatos[:top_k]:
             documento = self.documentos[int(indice)]
             resultados.append(
                 {
                     "doc_id": int(indice),
                     "titulo": documento["titulo"],
                     "relevancia": relevancia,
-                    "score": relevancia,
+                    "score": score,
                     "categoria": documento.get("categoria_predicha", documento.get("categoria_original", "?")),
                     "sentimiento": documento.get("sentimiento", {}).get("etiqueta", "?"),
                     "snippet": self._snippet(documento["cuerpo"]),
@@ -93,6 +94,29 @@ class MotorBusqueda:
             )
 
         return resultados
+
+    @classmethod
+    def _score_ajustado(cls, consulta: str, documento: dict, relevancia: float) -> float:
+        titulo = str(documento.get("titulo", ""))
+        cuerpo = str(documento.get("cuerpo", ""))
+        consulta_norm = cls._normalizar(consulta)
+        titulo_norm = cls._normalizar(titulo)
+        cuerpo_norm = cls._normalizar(cuerpo)
+
+        score = relevancia
+        if consulta_norm and consulta_norm in titulo_norm:
+            score += 1.0
+
+        tokens_consulta = cls._tokens_significativos(consulta_norm)
+        if tokens_consulta:
+            tokens_titulo = set(cls._tokens_significativos(titulo_norm))
+            tokens_texto = set(cls._tokens_significativos(f"{titulo_norm} {cuerpo_norm}"))
+            overlap_titulo = len(tokens_consulta & tokens_titulo) / len(tokens_consulta)
+            overlap_texto = len(tokens_consulta & tokens_texto) / len(tokens_consulta)
+            score += overlap_titulo * 0.7
+            score += overlap_texto * 0.2
+
+        return score
 
     def info_indice(self) -> dict:
         return {
@@ -117,8 +141,17 @@ class MotorBusqueda:
         texto = unicodedata.normalize("NFKD", texto)
         return "".join(caracter for caracter in texto if not unicodedata.combining(caracter))
 
+    @classmethod
+    def _tokens_significativos(cls, texto: str) -> set[str]:
+        stopwords = {
+            "a", "al", "asi", "con", "de", "del", "el", "en", "es", "fue",
+            "la", "las", "lo", "los", "mas", "para", "por", "que", "se",
+            "su", "sus", "un", "una", "y",
+        }
+        return {token for token in cls._tokenizar(texto) if len(token) >= 3 and token not in stopwords}
+
     @staticmethod
-    def _snippet(texto: str, longitud: int = 80) -> str:
+    def _snippet(texto: str, longitud: int = 500) -> str:
         return texto[:longitud] + ("..." if len(texto) > longitud else "")
 
     def _validar_indexado(self) -> None:

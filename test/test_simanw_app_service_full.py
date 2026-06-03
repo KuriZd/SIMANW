@@ -21,6 +21,9 @@ def test_simanw_app_service_demo_pipeline_runs_successfully():
     assert result.estado_pipeline.search == "completed"
     assert "AC-2" in result.evidencias_ac
     assert result.evidencias_ac["AC-2"]["archivo_json"].endswith("analisis_ac2.json")
+    assert result.evidencias_ac["AC-2"]["archivo_nube"].endswith("nube_ac2.png")
+    assert result.evidencias_ac["AC-2"]["nube_generada"] is True
+    assert Path(result.evidencias_ac["AC-2"]["archivo_nube"]).exists()
     assert "archivos_nube_categoria" in result.evidencias_ac["AC-2"]
     assert result.evidencias_ac["AC-2"]["archivo_nubes_categoria_json"].endswith("nubes_ac2_categorias.json")
     assert Path(result.evidencias_ac["AC-2"]["archivo_nubes_categoria_json"]).exists()
@@ -45,6 +48,33 @@ def test_search_service_returns_enriched_results_after_index():
 
     assert results
     assert {"titulo", "categoria", "sentimiento", "fecha", "url", "score", "snippet"} <= set(results[0])
+
+
+def test_search_service_falls_back_to_news_sources(monkeypatch):
+    service = SIMANWAppService()
+    service.analizar_noticias("demo")
+
+    def fake_sources(consulta, top_k=10, limite_por_fuente=30):
+        return [
+            {
+                "titulo": "Noticia externa",
+                "categoria": "mundo",
+                "sentimiento": "?",
+                "fecha": "2026-06-01",
+                "url": "https://example.com/externa",
+                "score": 0.8,
+                "snippet": consulta,
+                "doc_id": 0,
+                "origen_busqueda": "fuentes_noticias",
+            }
+        ]
+
+    monkeypatch.setattr(service.fase4_service, "buscar_en_fuentes", fake_sources)
+
+    results = service.buscar("consulta sin coincidencia local zzzzz", incluir_fuentes=True)
+
+    assert results[0]["titulo"] == "Noticia externa"
+    assert results[0]["origen_busqueda"] == "fuentes_noticias"
 
 
 def test_qa_service_returns_string():

@@ -36,7 +36,7 @@ aplicar_estilo_global()
 
 
 @st.cache_data(show_spinner="Cargando y preparando el corpus...")
-def load_data() -> list[dict]:
+def load_data(_mtime: float) -> list[dict]:
     ruta = Path("data") / "noticias_extraidas.json"
     if not ruta.exists() or ruta.stat().st_size < 10:
         return []
@@ -315,7 +315,9 @@ def main() -> None:
         "Panel visual para revisar el corpus, validar resultados del pipeline y navegar por las fases del proyecto.",
     )
 
-    noticias = load_data()
+    _ruta_corpus = Path("data") / "noticias_extraidas.json"
+    _mtime = _ruta_corpus.stat().st_mtime if _ruta_corpus.exists() else 0.0
+    noticias = load_data(_mtime)
 
     # Poner noticias en sesión para que AC-2 y otras páginas las usen
     if noticias and "noticias" not in st.session_state:

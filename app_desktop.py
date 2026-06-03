@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import customtkinter as ctk
 
-from src.simanw_app_service import ResultadoAnalisis, SIMANWAppService
+from src.simanw_app_service import ResultadoAnalisis, SIMANWAppService, SIMANWPipelineStatus
+from src.tendencias_temporales import TendenciasTemporales
 from src.ui.content_header import ContentHeaderFrame
 from src.ui.seccion_busqueda import SeccionBusquedaQA
 from src.ui.seccion_cargar import SeccionCargar
@@ -70,6 +74,7 @@ class SIMANWDesktopApp(ctk.CTk):
         self.pipeline_estado: dict = {}
 
         self._build_layout()
+        self._precargar_datos_previos()
         self.show_section("cargar")
 
     def _build_layout(self) -> None:
@@ -156,6 +161,254 @@ class SIMANWDesktopApp(ctk.CTk):
 
     def hide_progress(self) -> None:
         self.header.hide_progress()
+
+    def _precargar_datos_previos(self) -> None:
+        noticias = self._leer_lista_json(Path("data/noticias_extraidas.json"))
+        corpus = self._leer_lista_json(Path("data/processed/corpus_procesado.json"))
+        if not noticias and not corpus:
+            return
+        if not corpus:
+            corpus = [_corpus_minimo(noticia) for noticia in noticias]
+        if not noticias:
+            noticias = [_noticia_desde_corpus(item) for item in corpus]
+
+        estadisticas = _estadisticas_precargadas(corpus)
+        analisis_extra, rutas_extra, archivos_extra, evidencias_extra, grafo_info = self._generar_artefactos_precargados(
+            noticias,
+            corpus,
+        )
+        rutas = {
+            "noticias_json": "data/noticias_extraidas.json",
+            "noticias_csv": "data/noticias_extraidas.csv",
+            "corpus_json": "data/processed/corpus_procesado.json",
+            "corpus_csv": "data/processed/corpus_procesado.csv",
+        }
+        rutas.update(rutas_extra)
+        archivos = [ruta for ruta in rutas.values() if Path(ruta).exists()]
+        archivos.extend(archivos_extra)
+        pipeline = SIMANWPipelineStatus(
+            extraction="completed" if noticias else "pending",
+            nlp="completed" if corpus else "pending",
+            analysis="partial" if analisis_extra else "pending",
+            search="completed",
+            qa="completed",
+            graph="completed" if grafo_info and not grafo_info.get("errores") else "warning" if grafo_info else "pending",
+            reports="pending",
+        )
+        resultado = ResultadoAnalisis(
+            noticias=noticias,
+            corpus_procesado=corpus,
+            analisis={"nlp": estadisticas, **analisis_extra},
+            resultados_busqueda=[],
+            respuesta_qa=None,
+            grafo_info=grafo_info,
+            reporte_info={"rutas": rutas},
+            archivos_generados=archivos,
+            estado_pipeline=pipeline,
+            advertencias=["Datos precargados desde archivos locales; ejecuta Load para refrescar el pipeline completo."],
+            evidencias_ac=evidencias_extra,
+        )
+        self.simanw_service.fase1_service.noticias = noticias
+        self.simanw_service.fase2_service.corpus = corpus
+        try:
+            self.simanw_service.fase4_service.construir_indice(corpus)
+            self.simanw_service.motor_busqueda = self.simanw_service.fase4_service.motor
+            self.simanw_service.fase5_service.preparar(corpus, self.simanw_service.motor_busqueda)
+        except Exception as exc:
+            resultado.advertencias.append(f"No se pudo reconstruir busqueda/Q&A precargada: {exc}")
+            resultado.estado_pipeline.search = "warning"
+            resultado.estado_pipeline.qa = "warning"
+        self.simanw_service.estado_actual = resultado
+        self.set_resultado_analisis(resultado)
+        self.set_estado(
+            f"Datos previos precargados: {len(noticias)} noticias",
+            "ok",
+            total_noticias=len(noticias),
+        )
+
+    def _generar_artefactos_precargados(
+        self,
+        noticias: list[dict],
+        corpus: list[dict],
+    ) -> tuple[dict, dict[str, str], list[str], dict[str, dict], dict]:
+        analisis: dict = {}
+        rutas: dict[str, str] = {}
+        archivos: list[str] = []
+        evidencias: dict[str, dict] = {}
+        grafo_info: dict = {}
+
+        try:
+            ac2 = self.simanw_service._generar_evidencia_ac2(corpus)
+        except Exception as exc:
+            ac2 = {
+                "estado": "pendiente",
+                "observacion": f"No se pudieron generar nubes AC-2 desde datos guardados: {exc}",
+            }
+        if ac2:
+            evidencias["AC-2"] = ac2
+            if ac2.get("archivo_json"):
+                rutas["analisis_ac2_json"] = ac2["archivo_json"]
+                archivos.append(ac2["archivo_json"])
+            if ac2.get("archivo_nube"):
+                rutas["nube_ac2_png"] = ac2["archivo_nube"]
+                archivos.append(ac2["archivo_nube"])
+            if ac2.get("archivo_nubes_categoria_json"):
+                rutas["nubes_ac2_categorias"] = ac2["archivo_nubes_categoria_json"]
+                archivos.append(ac2["archivo_nubes_categoria_json"])
+            for ruta in ac2.get("archivos_nube_categoria", {}).values():
+                if ruta:
+                    archivos.append(str(ruta))
+
+        try:
+            tend = TendenciasTemporales()
+            tend.cargar_noticias(corpus or noticias)
+            tabla = tend.tabla_resumen()
+            if tabla:
+                ruta_csv = tend.exportar_csv("outputs/tendencias.csv")
+                ruta_png = tend.exportar_png("outputs/tendencias.png")
+                ruta_json = tend.guardar_reporte_json("reports/tendencias_ac9.json")
+                ruta_md = tend.guardar_conclusion_markdown("reports/conclusion_tendencias_ac9.md")
+                tendencias = {
+                    "granularidad": tend.granularidad,
+                    "tabla": tabla,
+                    "pico": tend.pico_notable(),
+                    "tendencias_terminos": tend.tendencias_terminos_por_categoria(minimo_categorias=3),
+                    "conclusion": tend.conclusion(),
+                }
+                analisis["tendencias"] = tendencias
+                rutas.update(
+                    {
+                        "tendencias_csv": str(ruta_csv),
+                        "tendencias_png": str(ruta_png),
+                        "tendencias_json": str(ruta_json),
+                        "tendencias_conclusion_md": str(ruta_md),
+                    }
+                )
+                archivos.extend([str(ruta_csv), str(ruta_png), str(ruta_json), str(ruta_md)])
+                evidencias["AC-9"] = {
+                    "actividad": "AC-9",
+                    "estado": "parcial",
+                    "ejecutado_desde": "Precarga local",
+                    "granularidad": tend.granularidad,
+                    "total_filas": len(tabla),
+                    "pico": tendencias["pico"],
+                    "temas_analizados": list(tendencias["tendencias_terminos"].keys()),
+                    "tendencias_terminos": tendencias["tendencias_terminos"],
+                    "archivo_csv": str(ruta_csv),
+                    "archivo_png": str(ruta_png),
+                    "archivo_json": str(ruta_json),
+                    "archivo_markdown": str(ruta_md),
+                }
+        except Exception as exc:
+            evidencias["AC-9"] = {
+                "actividad": "AC-9",
+                "estado": "pendiente",
+                "ejecutado_desde": "Precarga local",
+                "observacion": f"No se pudo generar grafica AC-9 desde datos guardados: {exc}",
+            }
+
+        try:
+            grafo_info = self.simanw_service.fase6_service.construir_grafo(
+                corpus,
+                {"categorias": {}, "sentimientos": {}, **analisis},
+            )
+            ttl = self.simanw_service.fase6_service.exportar_ttl()
+            jsonld = self.simanw_service.fase6_service.exportar_jsonld()
+            grafo_info["formatos_exportados"] = ["ttl", "jsonld"]
+            rutas["grafo_ttl"] = str(ttl)
+            rutas["grafo_jsonld"] = str(jsonld)
+            archivos.extend([str(ttl), str(jsonld)])
+            evidencia_ac7 = grafo_info.get("evidencia_ac7", {})
+            if evidencia_ac7:
+                evidencias["AC-7"] = {
+                    **evidencia_ac7,
+                    "actividad": "AC-7",
+                    "estado": "parcial",
+                    "ejecutado_desde": "Precarga local",
+                }
+                if evidencia_ac7.get("archivo_ttl"):
+                    rutas["kg_enriquecido_ac7_ttl"] = evidencia_ac7["archivo_ttl"]
+                    archivos.append(evidencia_ac7["archivo_ttl"])
+                if evidencia_ac7.get("archivo_json"):
+                    rutas["enlaces_wikidata_ac7_json"] = evidencia_ac7["archivo_json"]
+                    archivos.append(evidencia_ac7["archivo_json"])
+        except Exception as exc:
+            grafo_info = {
+                "total_triples": 0,
+                "formatos_exportados": [],
+                "entidades": {},
+                "consultas_ejemplo": [],
+                "evidencia_ac7": {},
+                "errores": [f"No se pudo reconstruir el grafo desde datos guardados: {exc}"],
+            }
+
+        return analisis, rutas, list(dict.fromkeys(archivos)), evidencias, grafo_info
+
+    @staticmethod
+    def _leer_lista_json(ruta: Path) -> list[dict]:
+        if not ruta.exists():
+            return []
+        try:
+            datos = json.loads(ruta.read_text(encoding="utf-8"))
+        except Exception:
+            return []
+        if not isinstance(datos, list):
+            return []
+        return [item for item in datos if isinstance(item, dict)]
+
+
+def _corpus_minimo(noticia: dict) -> dict:
+    titulo = str(noticia.get("titulo") or "Sin titulo")
+    cuerpo = str(noticia.get("cuerpo") or noticia.get("resumen") or titulo)
+    categoria = str(noticia.get("categoria") or noticia.get("categoria_original") or "sin_categoria")
+    tokens = [token for token in f"{titulo} {cuerpo}".lower().split() if token]
+    return {
+        **noticia,
+        "titulo": titulo,
+        "cuerpo": cuerpo,
+        "texto_original": cuerpo,
+        "texto_limpio": cuerpo,
+        "categoria": categoria,
+        "categoria_original": categoria,
+        "tokens": tokens,
+        "terminos": tokens,
+        "terminos_relevantes": tokens[:10],
+        "num_tokens": len(tokens),
+        "num_terminos": len(tokens),
+        "num_oraciones": max(cuerpo.count(".") + cuerpo.count("?") + cuerpo.count("!"), 1),
+        "vocabulario_unico": len(set(tokens)),
+        "riqueza_lexica": len(set(tokens)) / max(len(tokens), 1),
+    }
+
+
+def _noticia_desde_corpus(item: dict) -> dict:
+    return {
+        "titulo": item.get("titulo", "Sin titulo"),
+        "cuerpo": item.get("cuerpo") or item.get("texto_original") or item.get("texto_limpio") or "",
+        "fecha": item.get("fecha", "sin_fecha"),
+        "autor": item.get("autor", "Autor desconocido"),
+        "categoria": item.get("categoria_predicha") or item.get("categoria") or item.get("categoria_original") or "sin_categoria",
+        "url": item.get("url", ""),
+        "fuente_nombre": item.get("fuente_nombre", ""),
+        "sentimiento": item.get("sentimiento", {}),
+    }
+
+
+def _estadisticas_precargadas(corpus: list[dict]) -> dict:
+    total_tokens = sum(int(item.get("num_tokens", len(item.get("tokens", []))) or 0) for item in corpus)
+    total_terminos = sum(int(item.get("num_terminos", len(item.get("terminos", []))) or 0) for item in corpus)
+    vocabulario = set()
+    for item in corpus:
+        vocabulario.update(str(term) for term in item.get("terminos", []))
+    total_documentos = len(corpus)
+    return {
+        "total_documentos": total_documentos,
+        "total_tokens": total_tokens,
+        "stems_unicos": len(vocabulario),
+        "vocabulario_total": len(vocabulario),
+        "promedio_tokens_doc": total_tokens / max(total_documentos, 1),
+        "terminos_filtrados": total_terminos,
+    }
 
 
 def main() -> None:

@@ -57,10 +57,30 @@ def test_motor_busqueda_vectorial_devuelve_metadata():
     assert resultados[0]["categoria"] == "tecnologia"
     assert resultados[0]["sentimiento"] == "positivo"
     assert resultados[0]["relevancia"] > 0
-    assert resultados[0]["score"] == resultados[0]["relevancia"]
+    assert resultados[0]["score"] >= resultados[0]["relevancia"]
     assert resultados[0]["fecha"] == "2026-05-10"
     assert resultados[0]["url"] == "https://demo.test/ia"
     assert resultados[0]["snippet"]
+
+
+def test_motor_busqueda_prioriza_coincidencia_en_titulo():
+    motor = MotorBusqueda()
+    motor.indexar(
+        [
+            {
+                "titulo": "Resumen deportivo",
+                "cuerpo": "La fiesta fue mencionada sin detalles relevantes.",
+            },
+            {
+                "titulo": "La fiesta del PSG deja detenidos en Francia",
+                "cuerpo": "Cronica de la celebracion y sus incidentes.",
+            },
+        ]
+    )
+
+    resultados = motor.buscar_vectorial("La fiesta del PSG", top_k=2)
+
+    assert resultados[0]["titulo"] == "La fiesta del PSG deja detenidos en Francia"
 
 
 def test_motor_busqueda_requiere_documentos():

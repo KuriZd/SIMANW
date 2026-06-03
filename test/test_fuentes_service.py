@@ -121,3 +121,33 @@ def test_listar_fuentes_todas_incluye_inactivas():
 
     assert len(activas) == 0
     assert len(todas) == 1
+
+
+def test_guardar_fuente_personalizada_agrega_fuente_valida(tmp_path):
+    ruta_catalogo = tmp_path / "fuentes_noticias.py"
+    service = FuentesService(fuentes=[], ruta_catalogo=ruta_catalogo)
+
+    fuente = service.guardar_fuente_personalizada(
+        "https://example.com/rss.xml",
+        tipo="rss",
+        nombre="Example RSS",
+    )
+
+    assert fuente["id"] == "example_rss"
+    assert fuente["nombre"] == "Example RSS"
+    assert fuente["tipo"] == "rss"
+    assert fuente["urls"] == ["https://example.com/rss.xml"]
+    assert fuente["activo"] is True
+    assert service.obtener_fuente("example_rss")["nombre"] == "Example RSS"
+    assert "FUENTES_NOTICIAS" in ruta_catalogo.read_text(encoding="utf-8")
+
+
+def test_guardar_fuente_personalizada_no_duplica_url(tmp_path):
+    ruta_catalogo = tmp_path / "fuentes_noticias.py"
+    service = FuentesService(fuentes=[], ruta_catalogo=ruta_catalogo)
+
+    primera = service.guardar_fuente_personalizada("https://example.com/feed", nombre="Example")
+    segunda = service.guardar_fuente_personalizada("https://example.com/feed", nombre="Duplicada")
+
+    assert segunda["id"] == primera["id"]
+    assert len(service.listar_fuentes()) == 1

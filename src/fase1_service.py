@@ -13,7 +13,7 @@ from src.rastreador_paginado import RastreadorPaginado, crear_fetcher_simulado
 from src.rastreador_rss import RastreadorRSS
 
 
-FuenteFase1 = Literal["demo", "rss", "paginado", "predefinida"]
+FuenteFase1 = Literal["demo", "rss", "paginado", "predefinida", "todas"]
 
 
 @dataclass
@@ -29,8 +29,8 @@ class Fase1Service:
 
     def __init__(
         self,
-        ruta_json: str | Path = "data/raw/noticias.json",
-        ruta_csv: str | Path = "data/raw/noticias.csv",
+        ruta_json: str | Path = "data/noticias_extraidas.json",
+        ruta_csv: str | Path = "data/noticias_extraidas.csv",
     ) -> None:
         self.ruta_json = Path(ruta_json)
         self.ruta_csv = Path(ruta_csv)
@@ -54,10 +54,12 @@ class Fase1Service:
             noticias = self._rastrear_paginado(url)
         elif fuente == "predefinida":
             noticias = self.ejecutar_fuente_predefinida(url, limite_noticias=limite)
+        elif fuente == "todas":
+            noticias = self.ejecutar_todas_fuentes(limite_noticias=limite)
         else:
             raise ValueError(f"Fuente no soportada: {fuente}")
 
-        if fuente == "predefinida":
+        if fuente in {"predefinida", "todas"}:
             self.noticias = noticias
         else:
             self.noticias = [self._normalizar_noticia(noticia, idx) for idx, noticia in enumerate(noticias, start=1)]
@@ -127,6 +129,42 @@ class Fase1Service:
         ]
         self.noticias = noticias_norm
         return noticias_norm
+
+    def ejecutar_todas_fuentes(self, limite_noticias: int | None = None) -> list[dict]:
+        """Extrae noticias de todas las fuentes activas del catalogo local."""
+        self.errores = []
+        noticias: list[dict] = []
+        fuentes = self.fuentes_service.listar_fuentes(activas=True)
+        if not fuentes:
+            self.errores.append("No hay fuentes predefinidas activas.")
+            return []
+
+        limite_por_fuente = max(int(limite_noticias or 0), 1) if limite_noticias else None
+        errores_acumulados: list[str] = []
+        for fuente in fuentes:
+            try:
+                noticias_fuente = self.ejecutar_fuente_predefinida(
+                    fuente["id"],
+                    limite_noticias=limite_por_fuente or int(fuente.get("limite_noticias", 20)),
+                )
+                noticias.extend(noticias_fuente)
+                errores_acumulados.extend(f"{fuente.get('nombre', fuente.get('id'))}: {e}" for e in self.errores)
+            except Exception as exc:
+                errores_acumulados.append(f"{fuente.get('nombre', fuente.get('id'))}: {exc}")
+
+        deduplicadas: list[dict] = []
+        vistas: set[str] = set()
+        for noticia in noticias:
+            clave = (noticia.get("url") or noticia.get("titulo") or "").strip().lower()
+            if clave and clave in vistas:
+                continue
+            if clave:
+                vistas.add(clave)
+            deduplicadas.append(noticia)
+
+        self.noticias = deduplicadas
+        self.errores = errores_acumulados
+        return deduplicadas
 
     def exportar(self) -> tuple[Path, Path]:
         """Exporta el ultimo resultado normalizado a JSON y CSV."""
@@ -269,10 +307,13 @@ class Fase1Service:
             "paginado": "paginado",
             "predefinida": "predefinida",
             "fuente predefinida": "predefinida",
+            "todas": "todas",
+            "all": "todas",
+            "todas las fuentes": "todas",
             "rastreo paginado": "paginado",
         }
         if valor not in alias:
-            raise ValueError("Fuente valida: demo, rss o paginado.")
+            raise ValueError("Fuente valida: demo, rss, paginado, predefinida o todas.")
         return alias[valor]  # type: ignore[return-value]
 
 

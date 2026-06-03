@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -11,8 +12,6 @@ import unicodedata
 
 from src.exportador import guardar_json
 from src.alertas_consulta import ConsultaGuardada, SistemaAlertasConsulta, consultas_demo
-from src.analisis_discurso import AnalisisDiscurso, generar_nube_palabras
-from src.analizador_hilo import AnalizadorHiloDiscusion, HILO_IA_ES, cargar_hilo_desde_json
 from src.control_calidad import ControlCalidadCorpus
 from src.fase1_service import Fase1Service
 from src.fase2_service import Fase2Service
@@ -28,6 +27,23 @@ from src.knowledge_graph import (
 )
 from src.trazabilidad import TrazabilidadPipeline
 from src.usabilidad import EstudioUsabilidad, estudio_demo
+
+try:
+    from src.analisis_discurso import AnalisisDiscurso, generar_nube_palabras
+except Exception:
+    AnalisisDiscurso = None  # type: ignore[assignment]
+
+    def generar_nube_palabras(*_args, **_kwargs) -> bool:  # type: ignore[no-redef]
+        return False
+
+try:
+    from src.analizador_hilo import AnalizadorHiloDiscusion, HILO_IA_ES, cargar_hilo_desde_json
+except Exception:
+    AnalizadorHiloDiscusion = None  # type: ignore[assignment]
+    HILO_IA_ES: list[dict] = []
+
+    def cargar_hilo_desde_json(_ruta):  # type: ignore[no-redef]
+        return []
 
 
 @dataclass
@@ -106,6 +122,7 @@ class SIMANWAppService:
         self.fase2_service = Fase2Service()
         self.fase3_service = Fase3Service()
         self.fase4_service = Fase4Service()
+        self.fase4_service.fuentes_service = self.fase1_service.fuentes_service
         self.fase5_service = Fase5Service()
         self.fase6_service = Fase6Service()
         self.fase7_service = Fase7Service()
@@ -456,10 +473,25 @@ class SIMANWAppService:
         self.estado_actual = resultado
         return resultado
 
-    def buscar(self, consulta: str, modelo: str = "natural") -> list[dict]:
+    def buscar(self, consulta: str, modelo: str = "natural", incluir_fuentes: bool = False) -> list[dict]:
         if self.fase4_service is None:
             return []
-        return self.fase4_service.buscar_con_modelo(consulta, modelo=modelo, top_k=10)
+        resultados = self.fase4_service.buscar_con_modelo(consulta, modelo=modelo, top_k=10)
+        if not incluir_fuentes:
+            return resultados
+
+        mejor_score = max((float(item.get("score") or 0.0) for item in resultados), default=0.0)
+        if resultados and mejor_score >= 0.18 and _resultado_cubre_consulta(consulta, resultados[0]):
+            for item in resultados:
+                item.setdefault("origen_busqueda", "corpus_cargado")
+            return resultados
+
+        externos = self.fase4_service.buscar_en_fuentes(consulta, top_k=10, limite_por_fuente=30)
+        if externos:
+            return externos
+        for item in resultados:
+            item.setdefault("origen_busqueda", "corpus_cargado")
+        return resultados
 
     def preguntar(self, pregunta: str) -> str:
         if self.fase5_service is None:
@@ -817,6 +849,12 @@ class SIMANWAppService:
                 "observacion": "No hubo textos suficientes para analisis de discurso.",
             }
 
+        if AnalisisDiscurso is None:
+            return self._generar_evidencia_ac2_basica(
+                textos[:5],
+                "AnalisisDiscurso no disponible; se genero una nube basica desde el corpus procesado.",
+            )
+
         analizador = AnalisisDiscurso()
         textos_ac2 = textos[:5]
         analisis_textos = [analizador.analizar(item["texto"], item["titulo"]) for item in textos_ac2]
@@ -830,7 +868,7 @@ class SIMANWAppService:
             for analisis in analisis_textos
             for token in analisis.get("_tokens_filtrados", [])
         ]
-        nube_generada = generar_nube_palabras(tokens_nube, ruta_nube) if tokens_nube else False
+        nube_generada = _generar_nube_palabras_segura(tokens_nube, ruta_nube) if tokens_nube else False
         nubes_categoria = self._generar_nubes_ac2_por_categoria(textos_ac2, analisis_textos)
         AnalisisDiscurso.guardar_json(ruta, analisis_textos, comparativa)
         total_unigramas = sum(len(a.get("top_unigramas", [])) for a in analisis_textos)
@@ -857,6 +895,69 @@ class SIMANWAppService:
         }
 
     @staticmethod
+    def _generar_evidencia_ac2_basica(textos: list[dict], observacion: str) -> dict:
+        analisis_textos: list[dict] = []
+        for item in textos:
+            tokens = _tokens_ac2_basicos(item.get("texto", ""))
+            conteo = Counter(tokens)
+            analisis_textos.append(
+                {
+                    "estado": "parcial",
+                    "titulo": item.get("titulo", ""),
+                    "categoria": item.get("categoria", "sin_categoria"),
+                    "total_tokens": len(tokens),
+                    "vocabulario": len(conteo),
+                    "top_unigramas": conteo.most_common(20),
+                    "_tokens_filtrados": tokens,
+                }
+            )
+
+        ruta = "data/analisis_ac2.json"
+        ruta_nube = "data/nube_ac2.png"
+        tokens_nube = [token for analisis in analisis_textos for token in analisis.get("_tokens_filtrados", [])]
+        nube_generada = _generar_nube_palabras_segura(tokens_nube, ruta_nube) if tokens_nube else False
+        nubes_categoria = SIMANWAppService._generar_nubes_ac2_por_categoria(textos, analisis_textos)
+        Path(ruta).parent.mkdir(parents=True, exist_ok=True)
+        Path(ruta).write_text(
+            json.dumps(
+                {
+                    "actividad": "AC-2",
+                    "estado": "parcial",
+                    "observacion": observacion,
+                    "analisis": [
+                        {k: v for k, v in analisis.items() if not k.startswith("_")}
+                        for analisis in analisis_textos
+                    ],
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        total_unigramas = sum(len(a.get("top_unigramas", [])) for a in analisis_textos)
+        return {
+            "estado": "parcial",
+            "ultima_ejecucion": datetime.now(timezone.utc).isoformat(),
+            "ejecutado_desde": "Smart Results",
+            "observacion": observacion,
+            "textos_analizados": len(analisis_textos),
+            "unigramas": total_unigramas,
+            "bigramas": 0,
+            "trigramas": 0,
+            "riqueza_promedio": round(
+                sum((a.get("vocabulario", 0) / max(a.get("total_tokens", 1), 1)) for a in analisis_textos)
+                / max(len(analisis_textos), 1),
+                4,
+            ),
+            "archivo_json": ruta,
+            "archivo_nube": ruta_nube if nube_generada else "",
+            "archivos_nube_categoria": nubes_categoria.get("archivos", {}),
+            "archivo_nubes_categoria_json": nubes_categoria.get("archivo_json", ""),
+            "nubes_categoria_generadas": len(nubes_categoria.get("archivos", {})),
+            "nube_generada": nube_generada,
+        }
+
+    @staticmethod
     def _generar_nubes_ac2_por_categoria(textos: list[dict], analisis_textos: list[dict]) -> dict:
         tokens_por_categoria: dict[str, list[str]] = {}
         for item, analisis in zip(textos, analisis_textos):
@@ -870,7 +971,7 @@ class SIMANWAppService:
             if len(tokens) < 5:
                 continue
             ruta_categoria = f"data/nube_ac2_{_slug_archivo(categoria)}.png"
-            if generar_nube_palabras(tokens, ruta_categoria):
+            if _generar_nube_palabras_segura(tokens, ruta_categoria):
                 archivos[categoria] = ruta_categoria
 
         ruta_manifest = "data/nubes_ac2_categorias.json"
@@ -891,6 +992,13 @@ class SIMANWAppService:
         return {"archivos": archivos, "archivo_json": ruta_manifest}
 
     def _generar_evidencia_ac4(self, corpus: list[dict]) -> dict:
+        if AnalizadorHiloDiscusion is None:
+            return {
+                "actividad": "AC-4",
+                "estado": "pendiente",
+                "ejecutado_desde": "Smart Results",
+                "observacion": "AnalizadorHiloDiscusion no disponible; revise la instalacion de nltk/regex.",
+            }
         ruta_hilo = Path("data/hilo_discusion.json")
         origen = "archivo_real" if ruta_hilo.exists() else "hilo_simulado"
         try:
@@ -1098,6 +1206,8 @@ class SIMANWAppService:
             return noticias
         if source_norm in {"predefinida", "predefined"}:
             return self.fase1_service.ejecutar_fuente_predefinida(fuente_id or url or "", limite_noticias=limite)
+        if source_norm in {"todas", "all", "all_predefined", "todas_las_fuentes"}:
+            return self.fase1_service.ejecutar_todas_fuentes(limite_noticias=limite)
         if source_norm == "paginado" and paginado_config:
             resultado = self.fase1_service.ejecutar_paginado_configurado(paginado_config)
             if resultado.errores:
@@ -1156,3 +1266,152 @@ def _slug_archivo(texto: str) -> str:
     sin_acentos = "".join(caracter for caracter in normalizado if not unicodedata.combining(caracter))
     slug = re.sub(r"[^a-z0-9]+", "_", sin_acentos).strip("_")
     return slug or "sin_categoria"
+
+
+def _resultado_cubre_consulta(consulta: str, resultado: dict) -> bool:
+    tokens = _tokens_busqueda_significativos(consulta)
+    if not tokens:
+        return bool(resultado)
+    texto = " ".join(
+        str(resultado.get(campo) or "")
+        for campo in ("titulo", "snippet", "categoria", "url")
+    )
+    tokens_resultado = _tokens_busqueda_significativos(texto)
+    return bool(tokens & tokens_resultado)
+
+
+def _tokens_busqueda_significativos(texto: str) -> set[str]:
+    stopwords = {
+        "a", "al", "asi", "con", "de", "del", "el", "en", "es", "fue",
+        "la", "las", "lo", "los", "mas", "para", "por", "que", "se",
+        "su", "sus", "un", "una", "y",
+    }
+    normalizado = unicodedata.normalize("NFKD", str(texto).lower())
+    normalizado = "".join(caracter for caracter in normalizado if not unicodedata.combining(caracter))
+    return {
+        token
+        for token in re.findall(r"\b\w+\b", normalizado)
+        if len(token) >= 3 and token not in stopwords
+    }
+
+
+_STOPWORDS_AC2 = {
+    "ademas",
+    "ante",
+    "aqui",
+    "cada",
+    "como",
+    "con",
+    "contra",
+    "cuando",
+    "desde",
+    "donde",
+    "durante",
+    "entre",
+    "esta",
+    "este",
+    "estos",
+    "estas",
+    "para",
+    "pero",
+    "porque",
+    "sobre",
+    "tambien",
+    "tras",
+    "una",
+    "uno",
+    "unas",
+    "unos",
+    "del",
+    "las",
+    "los",
+    "que",
+    "por",
+    "mas",
+    "sus",
+    "son",
+    "fue",
+    "han",
+    "hay",
+}
+
+
+def _tokens_ac2_basicos(texto: str) -> list[str]:
+    tokens = re.findall(r"\b[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ]{4,}\b", texto.lower())
+    return [
+        unicodedata.normalize("NFKD", token).encode("ascii", "ignore").decode("ascii")
+        for token in tokens
+        if token not in _STOPWORDS_AC2
+    ]
+
+
+def _generar_nube_palabras_segura(tokens: list[str], ruta: str | Path) -> bool:
+    tokens = [str(token).strip().lower() for token in tokens if str(token).strip()]
+    if not tokens:
+        return False
+    ruta = Path(ruta)
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        if generar_nube_palabras(tokens, ruta):
+            return ruta.exists()
+    except Exception:
+        pass
+
+    texto = " ".join(tokens)
+    try:
+        from wordcloud import WordCloud  # type: ignore[import]
+
+        import matplotlib
+
+        matplotlib.use("Agg", force=True)
+        import matplotlib.pyplot as plt
+
+        nube = WordCloud(
+            width=900,
+            height=420,
+            background_color="#0f1117",
+            colormap="viridis",
+            max_words=120,
+            prefer_horizontal=0.9,
+        ).generate(texto)
+        plt.figure(figsize=(9, 4.2), facecolor="#0f1117")
+        plt.imshow(nube, interpolation="bilinear")
+        plt.axis("off")
+        plt.tight_layout(pad=0)
+        plt.savefig(ruta, dpi=120, bbox_inches="tight", pad_inches=0, facecolor="#0f1117")
+        plt.close()
+        return ruta.exists()
+    except Exception:
+        pass
+
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+
+        conteo = Counter(tokens).most_common(35)
+        imagen = Image.new("RGB", (900, 420), "#0f1117")
+        dibujo = ImageDraw.Draw(imagen)
+        try:
+            fuente_grande = ImageFont.truetype("arial.ttf", 34)
+            fuente_media = ImageFont.truetype("arial.ttf", 24)
+        except Exception:
+            fuente_grande = ImageFont.load_default()
+            fuente_media = ImageFont.load_default()
+        x, y = 28, 26
+        for idx, (token, count) in enumerate(conteo):
+            fuente = fuente_grande if idx < 8 else fuente_media
+            color = "#4f8ef7" if idx % 3 == 0 else "#e8eaf0" if idx % 3 == 1 else "#3ddc84"
+            texto_token = f"{token} {count}"
+            bbox = dibujo.textbbox((0, 0), texto_token, font=fuente)
+            ancho = bbox[2] - bbox[0]
+            if x + ancho > 870:
+                x = 28
+                y += 48 if idx < 8 else 34
+            if y > 380:
+                break
+            dibujo.text((x, y), texto_token, fill=color, font=fuente)
+            x += ancho + 24
+        imagen.save(ruta)
+        return ruta.exists()
+    except Exception:
+        return False

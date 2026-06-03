@@ -48,12 +48,31 @@ class ChatbotContextual:
     """
 
     _TEMAS_PALABRAS: dict[str, list[str]] = {
-        "tecnologia": ["tecnologia", "ia", "python", "programacion", "software", "algoritmo", "machine", "learning"],
-        "economia": ["economia", "mercado", "mercados", "finanzas", "dinero", "inflacion", "inversion"],
-        "ciencia": ["ciencia", "investigacion", "cientifico", "experimento", "laboratorio", "calentamiento"],
-        "politica": ["gobierno", "politica", "presidente", "congreso", "reforma"],
-        "salud": ["salud", "hospital", "vacuna", "medicina", "tratamiento", "paciente"],
-        "medio_ambiente": ["clima", "carbono", "contaminacion", "ambiente", "emisiones", "ambiental"],
+        "tecnologia": [
+            "tecnologia", "ia", "inteligencia", "artificial", "python", "programacion",
+            "software", "algoritmo", "machine", "learning", "datos", "digital",
+            "computacion", "red", "internet", "app", "sistema", "automatico",
+        ],
+        "economia": [
+            "economia", "mercado", "mercados", "finanzas", "dinero", "inflacion",
+            "inversion", "bolsa", "precio", "banco", "credito", "deuda",
+        ],
+        "ciencia": [
+            "ciencia", "investigacion", "cientifico", "experimento", "laboratorio",
+            "calentamiento", "estudio", "descubrimiento", "fisico", "quimico",
+        ],
+        "politica": [
+            "gobierno", "politica", "presidente", "congreso", "reforma", "ley",
+            "ministro", "eleccion", "voto", "partido", "diputado", "senado",
+        ],
+        "salud": [
+            "salud", "hospital", "vacuna", "medicina", "tratamiento", "paciente",
+            "enfermedad", "medico", "virus", "pandemia", "clinica",
+        ],
+        "medio_ambiente": [
+            "clima", "carbono", "contaminacion", "ambiente", "emisiones", "ambiental",
+            "naturaleza", "ecosistema", "biodiversidad", "reciclaje",
+        ],
     }
     _REFERENCIAS: list[str] = [
         "eso", "esa", "ese", "anterior", "mas sobre", "otra", "similar",
@@ -103,15 +122,107 @@ class ChatbotContextual:
         partes.append(pregunta)
         return " ".join(p for p in partes if p)
 
+    # ------------------------------------------------------------------
+    # Deteccion de intencion
+    # ------------------------------------------------------------------
+
+    _INTENCIONES: dict[str, list[str]] = {
+        "conteo": ["cuantas", "cuantos", "total", "numero", "cantidad", "cuantos hay"],
+        "sentimiento": ["sentimiento", "tono", "opinion", "positiv", "negativ", "emocion"],
+        "categoria": ["categoria", "tema", "tipo", "clasifica", "categorias", "temas"],
+        "resumen": ["resumen", "resume", "sintetiza", "sintesis", "panorama"],
+    }
+
+    def _clasificar_intencion(self, pregunta: str) -> str:
+        normalizada = normalizar_texto(pregunta)
+        for intencion, claves in self._INTENCIONES.items():
+            if any(clave in normalizada for clave in claves):
+                return intencion
+        return "busqueda"
+
+    def _respuesta_conteo(self) -> tuple[str, str, float]:
+        from collections import Counter as _Counter
+        categorias = _Counter(
+            n.get("categoria_predicha", n.get("categoria_original", "sin categoria"))
+            for n in self.noticias
+        )
+        distribucion = ", ".join(f"{cat}: {tot}" for cat, tot in categorias.most_common())
+        return (
+            f"Tengo {len(self.noticias)} noticias indexadas. Distribucion: {distribucion}",
+            "conteo",
+            1.0,
+        )
+
+    def _respuesta_sentimiento(self) -> tuple[str, str, float]:
+        from collections import Counter as _Counter
+        con_sentimiento = [n for n in self.noticias if "sentimiento" in n and "compound" in n["sentimiento"]]
+        if not con_sentimiento:
+            return "Las noticias aun no tienen analisis de sentimiento.", "sentimiento", 0.0
+        promedio = sum(n["sentimiento"]["compound"] for n in con_sentimiento) / len(con_sentimiento)
+        etiquetas = _Counter(n["sentimiento"].get("etiqueta", "?") for n in con_sentimiento)
+        tono = "positivo" if promedio > 0.05 else ("negativo" if promedio < -0.05 else "neutral")
+        return (
+            f"Analisis de sentimiento: {dict(etiquetas)}. Tono general: {tono} (promedio: {promedio:+.3f}).",
+            "sentimiento",
+            0.9,
+        )
+
+    def _respuesta_categoria(self) -> tuple[str, str, float]:
+        from collections import Counter as _Counter
+        categorias = _Counter(
+            n.get("categoria_predicha", n.get("categoria_original", "sin categoria"))
+            for n in self.noticias
+        )
+        lineas = ["Categorias en el corpus:"]
+        for cat, total in categorias.most_common():
+            ejemplo = next(
+                n["titulo"] for n in self.noticias
+                if n.get("categoria_predicha", n.get("categoria_original")) == cat
+            )
+            lineas.append(f"  - {cat} ({total}): {ejemplo}")
+        return "\n".join(lineas), "categoria", 0.9
+
+    def _respuesta_resumen(self) -> tuple[str, str, float]:
+        lineas = [f"Resumen del corpus ({len(self.noticias)} noticias):"]
+        for n in self.noticias:
+            sentimiento = n.get("sentimiento", {}).get("etiqueta", "?")
+            categoria = n.get("categoria_predicha", n.get("categoria_original", "?"))
+            lineas.append(f"  - [{categoria}][{sentimiento}] {n['titulo']}")
+        return "\n".join(lineas), "resumen", 1.0
+
+    # ------------------------------------------------------------------
+    # API publica
+    # ------------------------------------------------------------------
+
     def responder(self, pregunta: str) -> tuple[str, str, float]:
         """
         Genera una respuesta considerando el contexto acumulado.
 
         Devuelve (respuesta, tipo, confianza).
-        Tipos posibles: directa, contextual, personalizada, fallback.
+        Tipos posibles: conteo, sentimiento, categoria, resumen,
+                        directa, contextual, personalizada, fallback.
         """
         if not pregunta or not pregunta.strip():
             return "No entendi la pregunta. Por favor escribe algo.", "fallback", 0.0
+
+        # Intenciones estructuradas tienen prioridad sobre busqueda contextual
+        intencion = self._clasificar_intencion(pregunta)
+        if intencion == "conteo":
+            respuesta, tipo, confianza = self._respuesta_conteo()
+            self.actualizar_contexto(pregunta, tipo)
+            return respuesta, tipo, confianza
+        if intencion == "sentimiento":
+            respuesta, tipo, confianza = self._respuesta_sentimiento()
+            self.actualizar_contexto(pregunta, tipo)
+            return respuesta, tipo, confianza
+        if intencion == "categoria":
+            respuesta, tipo, confianza = self._respuesta_categoria()
+            self.actualizar_contexto(pregunta, tipo)
+            return respuesta, tipo, confianza
+        if intencion == "resumen":
+            respuesta, tipo, confianza = self._respuesta_resumen()
+            self.actualizar_contexto(pregunta, tipo)
+            return respuesta, tipo, confianza
 
         pregunta_normalizada = normalizar_texto(pregunta)
 
@@ -121,12 +232,11 @@ class ChatbotContextual:
             resultados = self._buscar(consulta_expandida)
             if resultados:
                 tipo = "contextual"
-                respuesta = (
-                    f"Basandome en nuestra conversacion anterior, encontre: "
-                    f"{resultados[0]['titulo']}. {resultados[0].get('snippet', '')}"
-                )
+                lineas = ["Basandome en nuestra conversacion anterior, encontre:"]
+                for r in resultados:
+                    lineas.append(f"\n**{r['titulo']}**\n{r.get('snippet', '')}")
                 self.actualizar_contexto(pregunta, tipo, resultados)
-                return respuesta, tipo, float(resultados[0]["relevancia"])
+                return "\n".join(lineas), tipo, float(resultados[0]["relevancia"])
 
         resultados = self._buscar(pregunta)
         if resultados:
@@ -136,20 +246,21 @@ class ChatbotContextual:
                 tema_prioritario = self.contexto_temas.most_common(1)[0][0]
 
             if tema_prioritario:
-                for resultado in resultados:
-                    if resultado.get("categoria") == tema_prioritario:
-                        tipo = "personalizada"
-                        respuesta = (
-                            f"Como te interesa {tema_prioritario}, mira esto: "
-                            f"{resultado['titulo']}. {resultado.get('snippet', '')}"
-                        )
-                        self.actualizar_contexto(pregunta, tipo, [resultado])
-                        return respuesta, tipo, float(resultado["relevancia"])
+                filtrados = [r for r in resultados if r.get("categoria") == tema_prioritario]
+                if filtrados:
+                    tipo = "personalizada"
+                    lineas = [f"Como te interesa {tema_prioritario}, aqui las noticias relevantes:"]
+                    for r in filtrados:
+                        lineas.append(f"\n**{r['titulo']}**\n{r.get('snippet', '')}")
+                    self.actualizar_contexto(pregunta, tipo, filtrados)
+                    return "\n".join(lineas), tipo, float(filtrados[0]["relevancia"])
 
             tipo = "directa"
-            respuesta = f"{resultados[0]['titulo']}. {resultados[0].get('snippet', '')}"
+            lineas = [f"Encontre {len(resultados)} noticias relevantes:"]
+            for r in resultados:
+                lineas.append(f"\n**{r['titulo']}**\n{r.get('snippet', '')}")
             self.actualizar_contexto(pregunta, tipo, resultados)
-            return respuesta, tipo, float(resultados[0]["relevancia"])
+            return "\n".join(lineas), tipo, float(resultados[0]["relevancia"])
 
         tipo = "fallback"
         respuesta = "No encontre algo especifico. Puedes darme mas detalles?"
@@ -196,9 +307,9 @@ class ChatbotContextual:
         if not consulta or not consulta.strip():
             return []
         if hasattr(self.motor, "buscar_vectorial"):
-            return self.motor.buscar_vectorial(consulta, top_k=5)
+            return self.motor.buscar_vectorial(consulta, top_k=20)
         if hasattr(self.motor, "buscar"):
-            return self.motor.buscar(consulta, top_k=5)
+            return self.motor.buscar(consulta, top_k=20)
         return []
 
     def _temas_en_pregunta(self, pregunta: str) -> list[str]:
@@ -218,7 +329,14 @@ class ChatbotContextual:
 
     @classmethod
     def _es_referencia_contextual(cls, pregunta_normalizada: str) -> bool:
-        return any(ref in pregunta_normalizada for ref in cls._REFERENCIAS)
+        palabras = set(re.findall(r"\b\w+\b", pregunta_normalizada))
+        for ref in cls._REFERENCIAS:
+            if " " in ref:  # frase multi-palabra: busqueda de subcadena
+                if ref in pregunta_normalizada:
+                    return True
+            elif ref in palabras:  # palabra sola: coincidencia exacta
+                return True
+        return False
 
     @staticmethod
     def _normalizar(texto: str) -> str:

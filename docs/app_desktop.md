@@ -23,6 +23,7 @@ python app_desktop.py
 |---|---|
 | Demo local | Usa datos locales de demostracion. Es el modo recomendado para pruebas, clases y presentaciones sin internet. |
 | Predefined source | Usa el catalogo de `config/fuentes_noticias.py`: La Jornada, Aristegui Noticias, Proceso, El Heraldo de Mexico e INEGI Sala de Prensa. |
+| All predefined sources | Ejecuta todas las fuentes activas del catalogo, agrega metadatos de fuente y deduplica por URL/titulo. Puede tardar mas y depender de varios proveedores externos. |
 | Custom RSS/URL | Permite ingresar una URL RSS o una URL inicial para rastreo paginado. |
 | File | Soportado en el servicio unificado mediante `source="archivo"` si se invoca programaticamente. |
 

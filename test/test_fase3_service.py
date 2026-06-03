@@ -71,3 +71,29 @@ def test_fase3_ac3_corpus_pequeno_no_rompe_pipeline():
     assert ac3["estado"] == "parcial"
     assert noticias
     assert corpus_enriquecido
+
+
+def test_fase3_sentimiento_dominante_usa_mayoria_no_promedio():
+    corpus = _noticias_supervisadas()[:3]
+    service = Fase3Service()
+
+    class AnalizadorFake:
+        def analizar_noticias(self, _noticias):
+            return [
+                {"etiqueta": "neutral", "compound": 0.0, "positivo": 0.0, "negativo": 0.0, "neutral": 1.0},
+                {"etiqueta": "neutral", "compound": 0.0, "positivo": 0.0, "negativo": 0.0, "neutral": 1.0},
+                {"etiqueta": "positivo", "compound": 0.9, "positivo": 1.0, "negativo": 0.0, "neutral": 0.0},
+            ], {
+                "distribucion": {"neutral": 2, "positivo": 1},
+                "sentimiento_promedio": 0.3,
+                "tono_general": "positivo",
+            }
+
+    service._analizador = AnalizadorFake()
+
+    _noticias, _corpus, analisis = service.analizar(corpus, corpus)
+
+    assert analisis["sentimientos"] == {"neutral": 2, "positivo": 1}
+    assert analisis["sentimiento_dominante"] == "neutral"
+    assert analisis["tono_general"] == "positivo"
+    assert analisis["sentimiento_promedio"] == 0.3

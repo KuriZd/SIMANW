@@ -1,5 +1,6 @@
 from src import fase1_service as fase1_module
 from src.fase1_service import Fase1Service
+from src.fuentes_service import FuentesService
 
 
 class RastreadorRSSFake:
@@ -48,3 +49,49 @@ def test_ejecutar_fuente_predefinida_preserva_metadatos(monkeypatch):
     assert noticia["fuente_id"] == "aristegui_noticias"
     assert noticia["fuente_tipo"] == "rss"
     assert {"titulo", "cuerpo", "fecha", "autor", "categoria", "url"} <= set(noticia)
+
+
+def test_ejecutar_todas_fuentes_activas_agrega_metadata(monkeypatch):
+    RastreadorRSSFake.llamadas = []
+    monkeypatch.setattr(fase1_module, "RastreadorRSS", RastreadorRSSFake)
+    service = Fase1Service()
+    service.fuentes_service = FuentesService(
+        [
+            {
+                "id": "fuente_uno",
+                "nombre": "Fuente Uno",
+                "tipo": "rss",
+                "pais": "MX",
+                "idioma": "es",
+                "base_url": "https://uno.test",
+                "urls": ["https://uno.test/feed"],
+                "dominios_permitidos": ["uno.test"],
+                "activo": True,
+                "limite_noticias": 1,
+                "delay_segundos": 0,
+                "requiere_parser_html": False,
+                "notas": "",
+            },
+            {
+                "id": "fuente_dos",
+                "nombre": "Fuente Dos",
+                "tipo": "rss",
+                "pais": "MX",
+                "idioma": "es",
+                "base_url": "https://dos.test",
+                "urls": ["https://dos.test/feed"],
+                "dominios_permitidos": ["dos.test"],
+                "activo": True,
+                "limite_noticias": 1,
+                "delay_segundos": 0,
+                "requiere_parser_html": False,
+                "notas": "",
+            },
+        ]
+    )
+
+    noticias = service.ejecutar_todas_fuentes(limite_noticias=1)
+
+    fuentes = {noticia["fuente_id"] for noticia in noticias}
+    assert fuentes == {"fuente_uno", "fuente_dos"}
+    assert all(noticia["fuente_nombre"] for noticia in noticias)

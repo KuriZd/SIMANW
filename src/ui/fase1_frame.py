@@ -119,6 +119,18 @@ class Fase1Frame(ctk.CTkFrame):
         )
         self.url_entry.grid(row=4, column=0, sticky="ew", padx=CARD_PADDING, pady=(0, 10))
 
+        self.btn_guardar_fuente = ctk.CTkButton(
+            card,
+            text="Guardar fuente",
+            command=self._guardar_fuente_custom,
+            fg_color=THEME["bg_input"],
+            hover_color=THEME["border"],
+            border_width=1,
+            border_color=THEME["border"],
+            text_color=THEME["text_1"],
+        )
+        self.btn_guardar_fuente.grid(row=5, column=0, sticky="ew", padx=CARD_PADDING, pady=(0, 8))
+
         self.btn_ejecutar = ctk.CTkButton(
             card,
             text="Analyze News",
@@ -127,7 +139,7 @@ class Fase1Frame(ctk.CTkFrame):
             hover_color=THEME["accent"],
             text_color=THEME["text_1"],
         )
-        self.btn_ejecutar.grid(row=5, column=0, sticky="ew", padx=CARD_PADDING, pady=(0, CARD_PADDING))
+        self.btn_ejecutar.grid(row=6, column=0, sticky="ew", padx=CARD_PADDING, pady=(0, CARD_PADDING))
         self._actualizar_modo_entrada()
         return card
 
@@ -392,6 +404,7 @@ class Fase1Frame(ctk.CTkFrame):
             self.selector_predef.configure(state=state)
             self.selector_tipo_custom.configure(state=state)
             self.url_entry.configure(state=state)
+            self.btn_guardar_fuente.configure(state=state)
         else:
             self._actualizar_modo_entrada()
 
@@ -401,20 +414,45 @@ class Fase1Frame(ctk.CTkFrame):
         self.btn_csv.configure(state=state)
         self.btn_todo.configure(state=state)
 
+    def _guardar_fuente_custom(self) -> None:
+        url = self.url_var.get().strip()
+        tipo = "rss" if self.tipo_custom_var.get() == "RSS" else "html"
+        try:
+            fuente = self.fuentes_service.guardar_fuente_personalizada(url, tipo=tipo)
+        except Exception as exc:
+            messagebox.showerror("Guardar fuente", str(exc))
+            return
+
+        self.service.fuentes_service = self.fuentes_service
+        self._refrescar_fuentes_predefinidas(fuente["nombre"])
+        self.root_app.set_estado(f"Fuente guardada: {fuente['nombre']}", "ok", total_noticias=len(self.noticias))
+        messagebox.showinfo("Guardar fuente", f"Fuente guardada: {fuente['nombre']}")
+
+    def _refrescar_fuentes_predefinidas(self, seleccion: str | None = None) -> None:
+        nombres = self.fuentes_service.listar_nombres_fuentes()
+        self.selector_predef.configure(values=nombres or ["Sin fuentes activas"])
+        if seleccion and seleccion in nombres:
+            self.fuente_predef_var.set(seleccion)
+        elif nombres and self.fuente_predef_var.get() not in nombres:
+            self.fuente_predef_var.set(nombres[0])
+
     def _actualizar_modo_entrada(self) -> None:
         modo = self.modo_var.get()
         if modo == "Demo local":
             self.selector_predef.configure(state="disabled")
             self.selector_tipo_custom.configure(state="disabled")
             self.url_entry.configure(state="disabled")
+            self.btn_guardar_fuente.configure(state="disabled")
         elif modo == "Predefined source":
             self.selector_predef.configure(state="normal")
             self.selector_tipo_custom.configure(state="disabled")
             self.url_entry.configure(state="disabled")
+            self.btn_guardar_fuente.configure(state="disabled")
         else:
             self.selector_predef.configure(state="disabled")
             self.selector_tipo_custom.configure(state="normal")
             self.url_entry.configure(state="normal")
+            self.btn_guardar_fuente.configure(state="normal")
 
     def _etiqueta_fuente_actual(self, resultado: ResultadoFase1) -> str:
         if resultado.fuente == "predefinida" and self.noticias:

@@ -226,6 +226,9 @@ def generar_nube_palabras(tokens: list[str], ruta: str | Path) -> bool:
     """
     try:
         from wordcloud import WordCloud  # type: ignore[import]
+        import matplotlib
+
+        matplotlib.use("Agg", force=True)
         import matplotlib.pyplot as plt
     except ImportError:
         return False

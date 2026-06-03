@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from src.fase4_service import Fase4Service
+from src.fase1_service import Fase1Service
 
 
 def _corpus():
@@ -78,3 +79,27 @@ def test_fase4_usa_consultas_configuradas_por_categoria(tmp_path):
     assert evidencia["origen_consultas"] == "config/consultas_ac5.json"
     assert evidencia["total_consultas"] == 1
     assert evidencia["resultados"][0]["relevantes"] == [0, 1]
+
+
+def test_fase4_busca_en_fuentes_con_indice_temporal(monkeypatch):
+    def fake_todas(self, limite_noticias=None):
+        self.errores = []
+        return [
+            {
+                "titulo": "Nueva mision lunar",
+                "cuerpo": "La NASA presenta una mision lunar con avances cientificos.",
+                "categoria": "ciencia",
+                "fecha": "2026-06-01",
+                "autor": "Redaccion",
+                "url": "https://example.com/luna",
+            }
+        ]
+
+    monkeypatch.setattr(Fase1Service, "ejecutar_todas_fuentes", fake_todas)
+    service = Fase4Service()
+
+    resultados = service.buscar_en_fuentes("mision lunar nasa")
+
+    assert resultados
+    assert resultados[0]["titulo"] == "Nueva mision lunar"
+    assert resultados[0]["origen_busqueda"] == "fuentes_noticias"

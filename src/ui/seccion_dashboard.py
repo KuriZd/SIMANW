@@ -6,6 +6,9 @@ import customtkinter as ctk
 
 from src.ui_theme import CARD_PADDING, CARD_RADIUS, FONT_BODY, FONT_H1, FONT_H2, FONT_META, FONT_STAT, FONT_STAT_LARGE, THEME
 
+_DISTRIBUTION_CARD_MIN_WIDTH = 180
+_DISTRIBUTION_MAX_COLUMNS = 4
+
 
 class SeccionDashboard(ctk.CTkFrame):
     """Panel de resumen con estado real del pipeline SIMANW."""
@@ -156,7 +159,7 @@ class SeccionDashboard(ctk.CTkFrame):
     def _build_fuentes_card(self, master, noticias: list[dict]) -> ctk.CTkFrame:
         card = self._card(master)
         ctk.CTkLabel(card, text="Distribucion por fuente", font=FONT_H2, text_color=THEME["text_1"]).grid(
-            row=0, column=0, columnspan=99, sticky="w", padx=CARD_PADDING, pady=(CARD_PADDING, 8)
+            row=0, column=0, sticky="w", padx=CARD_PADDING, pady=(CARD_PADDING, 8)
         )
         self._build_distribution(card, Counter(n.get("fuente_nombre") or n.get("fuente") or "Demo local" for n in noticias), len(noticias))
         return card
@@ -164,7 +167,7 @@ class SeccionDashboard(ctk.CTkFrame):
     def _build_categorias_card(self, master, noticias: list[dict]) -> ctk.CTkFrame:
         card = self._card(master)
         ctk.CTkLabel(card, text="Distribucion por categoria", font=FONT_H2, text_color=THEME["text_1"]).grid(
-            row=0, column=0, columnspan=99, sticky="w", padx=CARD_PADDING, pady=(CARD_PADDING, 8)
+            row=0, column=0, sticky="w", padx=CARD_PADDING, pady=(CARD_PADDING, 8)
         )
         counter = Counter(
             n.get("categoria_predicha") or n.get("categoria") or n.get("categoria_original") or "sin_categoria"
@@ -236,12 +239,67 @@ class SeccionDashboard(ctk.CTkFrame):
         return card
 
     def _build_distribution(self, card, counter: Counter, total: int) -> None:
-        for col, (label, count) in enumerate(counter.most_common()):
-            pct_text = f"{count / total * 100:.0f}%" if total else "0%"
-            frame = ctk.CTkFrame(card, fg_color=THEME["bg_base"], corner_radius=CARD_RADIUS)
-            frame.grid(row=1, column=col, padx=(CARD_PADDING if col == 0 else 4, 4), pady=(0, CARD_PADDING))
-            ctk.CTkLabel(frame, text=pct_text, font=FONT_STAT, text_color=THEME["accent"]).grid(row=0, column=0, padx=8, pady=(6, 0))
-            ctk.CTkLabel(frame, text=f"{label} ({count})", font=FONT_META, text_color=THEME["text_2"]).grid(row=1, column=0, padx=8, pady=(0, 6))
+        card.grid_columnconfigure(0, weight=1)
+
+        container = ctk.CTkFrame(card, fg_color=THEME["bg_surface"], corner_radius=0)
+        container.grid(row=1, column=0, sticky="ew", padx=CARD_PADDING, pady=(0, CARD_PADDING))
+
+        items = counter.most_common()
+        if not items:
+            ctk.CTkLabel(
+                container,
+                text="Sin datos disponibles.",
+                font=FONT_META,
+                text_color=THEME["text_2"],
+            ).grid(row=0, column=0, sticky="w")
+            return
+
+        state = {"columns": 0}
+
+        def render(columns: int) -> None:
+            columns = max(1, min(columns, len(items)))
+            if state["columns"] == columns:
+                return
+            state["columns"] = columns
+            for child in container.winfo_children():
+                child.destroy()
+            for col in range(_DISTRIBUTION_MAX_COLUMNS):
+                container.grid_columnconfigure(col, weight=0, uniform="")
+            for col in range(columns):
+                container.grid_columnconfigure(col, weight=1, uniform="distribution")
+
+            for index, (label, count) in enumerate(items):
+                row = index // columns
+                col = index % columns
+                pct_text = f"{count / total * 100:.0f}%" if total else "0%"
+                frame = ctk.CTkFrame(container, fg_color=THEME["bg_base"], corner_radius=CARD_RADIUS)
+                frame.grid(row=row, column=col, sticky="nsew", padx=4, pady=4)
+                frame.grid_columnconfigure(0, weight=1)
+
+                ctk.CTkLabel(
+                    frame,
+                    text=pct_text,
+                    font=FONT_STAT,
+                    text_color=THEME["accent"],
+                    anchor="center",
+                ).grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 2))
+                ctk.CTkLabel(
+                    frame,
+                    text=f"{label} ({count})",
+                    font=FONT_META,
+                    text_color=THEME["text_2"],
+                    anchor="center",
+                    wraplength=160,
+                    justify="center",
+                ).grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 10))
+
+        def on_resize(event) -> None:
+            available = max(event.width, _DISTRIBUTION_CARD_MIN_WIDTH)
+            columns = min(_DISTRIBUTION_MAX_COLUMNS, max(1, available // _DISTRIBUTION_CARD_MIN_WIDTH))
+            render(columns)
+
+        render(min(_DISTRIBUTION_MAX_COLUMNS, len(items)))
+        container.bind("<Configure>", on_resize)
 
 
 def _top_terms(corpus: list[dict], n: int = 12) -> list[tuple[str, int]]:

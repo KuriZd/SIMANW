@@ -22,6 +22,7 @@ class SeccionResultados(ctk.CTkFrame):
         self._analisis_discurso = self._cargar_analisis_discurso()
         self.ac2_nube_var = ctk.StringVar(value="General")
         self._ac2_wordcloud_images: dict[str, ctk.CTkImage] = {}
+        self._timeline_image_ref: ctk.CTkImage | None = None
         self._ac2_nube_host = None
         self._config_treeview_style()
         self._build()
@@ -90,7 +91,8 @@ class SeccionResultados(ctk.CTkFrame):
 
         self._build_tabla_card(right).grid(row=0, column=0, sticky="ew", pady=(0, 12))
         self._build_detalle_card(right).grid(row=1, column=0, sticky="ew", pady=(0, 12))
-        self._build_ac2_visual_card(right).grid(row=2, column=0, sticky="ew")
+        self._build_ac2_visual_card(right).grid(row=2, column=0, sticky="ew", pady=(0, 12))
+        self._build_timeline_graph_card(right).grid(row=3, column=0, sticky="ew")
 
         self._poblar_tabla()
 
@@ -477,6 +479,133 @@ class SeccionResultados(ctk.CTkFrame):
             return True
         except Exception:
             return False
+
+    def _build_timeline_graph_card(self, master) -> ctk.CTkFrame:
+        card = self._card(master)
+        card.configure(height=360)
+        card.grid_propagate(False)
+        card.grid_columnconfigure(0, weight=1)
+        card.grid_rowconfigure(2, weight=1)
+
+        ctk.CTkLabel(
+            card,
+            text="Timeline & trends (AC-9)",
+            font=FONT_H2,
+            text_color=THEME["text_1"],
+        ).grid(row=0, column=0, sticky="w", padx=CARD_PADDING, pady=(CARD_PADDING, 4))
+
+        ctk.CTkLabel(
+            card,
+            text=self._timeline_summary_text(),
+            font=FONT_META,
+            text_color=THEME["text_2"],
+            anchor="w",
+        ).grid(row=1, column=0, sticky="ew", padx=CARD_PADDING, pady=(0, 8))
+
+        chart = ctk.CTkFrame(card, fg_color=THEME["bg_input"], corner_radius=CARD_RADIUS)
+        chart.grid(row=2, column=0, sticky="nsew", padx=CARD_PADDING, pady=(0, CARD_PADDING))
+        chart.grid_columnconfigure(0, weight=1)
+        chart.grid_rowconfigure(0, weight=1)
+
+        if self._insertar_timeline_png(chart):
+            return card
+
+        self._insertar_timeline_barras(chart)
+        return card
+
+    def _timeline_summary_text(self) -> str:
+        analisis = getattr(self.root_app, "analisis", {}) or {}
+        tendencias = analisis.get("tendencias", {}) or {}
+        result = getattr(self.root_app, "resultado_actual", None)
+        evidencia = result.evidencias_ac.get("AC-9", {}) if result else {}
+        pico = tendencias.get("pico", {}) or evidencia.get("pico", {}) or {}
+        temas = evidencia.get("temas_analizados", [])
+        partes = [
+            f"Granularidad: {tendencias.get('granularidad') or evidencia.get('granularidad', 'mes')}",
+            f"Pico: {pico.get('categoria', '-')} / {pico.get('periodo', '-')} ({pico.get('count', 0)})",
+        ]
+        if temas:
+            partes.append(f"Temas: {', '.join(temas[:4])}")
+        return " | ".join(partes)
+
+    def _insertar_timeline_png(self, host) -> bool:
+        ruta = self._timeline_png_path()
+        if not ruta or not ruta.exists():
+            return False
+        try:
+            from PIL import Image
+
+            image = Image.open(ruta)
+            self._timeline_image_ref = ctk.CTkImage(light_image=image, dark_image=image, size=(720, 250))
+            ctk.CTkLabel(host, text="", image=self._timeline_image_ref).grid(
+                row=0, column=0, sticky="nsew", padx=10, pady=10
+            )
+            return True
+        except Exception:
+            return False
+
+    def _timeline_png_path(self) -> Path | None:
+        rutas = getattr(self.root_app, "rutas_exportacion", {}) or {}
+        result = getattr(self.root_app, "resultado_actual", None)
+        evidencia = result.evidencias_ac.get("AC-9", {}) if result else {}
+        candidatos = [
+            evidencia.get("archivo_png"),
+            rutas.get("tendencias_png"),
+            "outputs/tendencias.png",
+        ]
+        for ruta in candidatos:
+            if ruta and Path(ruta).exists():
+                return Path(ruta)
+        return None
+
+    def _insertar_timeline_barras(self, host) -> None:
+        tabla = self._timeline_tabla()
+        if not tabla:
+            ctk.CTkLabel(
+                host,
+                text="Grafica pendiente: ejecuta Load / Analyze News para generar outputs/tendencias.png.",
+                font=FONT_META,
+                text_color=THEME["text_2"],
+                wraplength=620,
+            ).grid(row=0, column=0, sticky="nsew", padx=14, pady=14)
+            return
+
+        rows = sorted(tabla, key=lambda item: (-int(item.get("noticias", 0)), str(item.get("categoria", ""))))[:8]
+        max_count = max(int(row.get("noticias", 0)) for row in rows) or 1
+        for index, row in enumerate(rows):
+            label = f"{row.get('periodo', '-')} · {row.get('categoria', '-')}"
+            count = int(row.get("noticias", 0))
+            line = ctk.CTkFrame(host, fg_color="transparent")
+            line.grid(row=index, column=0, sticky="ew", padx=14, pady=4)
+            line.grid_columnconfigure(1, weight=1)
+            ctk.CTkLabel(line, text=label, font=FONT_META, text_color=THEME["text_1"], width=180, anchor="w").grid(
+                row=0, column=0, sticky="w"
+            )
+            track = ctk.CTkFrame(line, fg_color=THEME["border"], corner_radius=4, height=14)
+            track.grid(row=0, column=1, sticky="ew", padx=8)
+            track.grid_propagate(False)
+            ctk.CTkFrame(track, fg_color=THEME["accent"], corner_radius=4, height=14).place(
+                relx=0,
+                rely=0,
+                relwidth=count / max_count,
+                relheight=1,
+            )
+            ctk.CTkLabel(line, text=str(count), font=FONT_META, text_color=THEME["text_2"], width=36).grid(
+                row=0, column=2
+            )
+
+    def _timeline_tabla(self) -> list[dict]:
+        analisis = getattr(self.root_app, "analisis", {}) or {}
+        tendencias = analisis.get("tendencias", {}) or {}
+        tabla = tendencias.get("tabla", [])
+        if isinstance(tabla, list) and tabla:
+            return [item for item in tabla if isinstance(item, dict)]
+        result = getattr(self.root_app, "resultado_actual", None)
+        evidencia = result.evidencias_ac.get("AC-9", {}) if result else {}
+        tabla_evidencia = evidencia.get("tabla", [])
+        if isinstance(tabla_evidencia, list):
+            return [item for item in tabla_evidencia if isinstance(item, dict)]
+        return []
 
     def _poblar_tabla(self) -> None:
         for row in self.tabla.get_children():
